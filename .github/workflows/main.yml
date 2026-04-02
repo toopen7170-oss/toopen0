@@ -1,11 +1,27 @@
 name: Build APK
 on: [push, pull_request]
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # 최신 안정화 버전 사용
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
+
+      - name: Get Date
+        id: get-date
+        run: |
+          echo "::set-output name=date::$(date +'%Y-%m-%d')"
+        shell: bash
+
       - name: Build with Buildozer
-        uses: ArtemSerebriakov/buildozer-action@v1
+        # 검증된 공식 빌도저 액션으로 교체했습니다.
+        uses: Enteee/buildozer-action@v1.1.2
         with:
           command: buildozer android debug
+          repository_root: .
+
+      - name: Upload APK
+        uses: actions/actions/upload-artifact@v3
+        with:
+          name: toopen0-app-${{ steps.get-date.outputs.date }}
+          path: bin/*.apk
