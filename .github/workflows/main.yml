@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # 더 안정적인 22.04 버전을 사용하여 호환성을 높입니다.
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -13,28 +13,31 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev build-essential openjdk-17-jdk
+          sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
+            libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
+            build-essential openjdk-17-jdk python3-dev
           pip install --upgrade pip
+          # 빌드에 필요한 핵심 파이썬 도구들 설치
           pip install "Cython<3.0" buildozer kivy pillow
 
       - name: Build with Buildozer
         run: |
-          # 안드로이드 SDK 라이선스를 강제로 자동 수락하는 설정입니다.
+          # SDK 라이선스 자동 수락 설정
           mkdir -p ~/.android && touch ~/.android/repositories.cfg
-          # 빌도저 실행 (라이선스 자동 수락 옵션 포함)
+          # 빌드 전 이전 찌꺼기 제거 (clean) 후 빌드 시작
+          buildozer android clean
           buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
-          # 라이선스 자동 수락을 위한 핵심 설정
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
           USER: root
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-App-Final-v2
+          name: PristonTale-App-Final-v3
           path: bin/*.apk
