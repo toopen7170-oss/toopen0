@@ -16,22 +16,22 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          # libtinfo5 대신 libtinfo6를 사용하고, 빌드 필수 도구를 최신화했습니다.
           sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev libtinfo6 cmake libffi-dev libssl-dev build-essential
           pip install --upgrade pip
-          pip install buildozer kivy pillow
+          # Cython을 반드시 포함해야 빌드가 진행됩니다.
+          pip install "Cython<3.0" buildozer kivy pillow
 
       - name: Build with Buildozer
         run: |
-          # 처음 실행 시 사용자 입력을 건너뛰기 위해 yes 명령어를 조합합니다.
-          yes | buildozer android debug
+          # yes 명령어 대신 buildozer 자체의 자동 수락 옵션을 사용하거나 직접 실행합니다.
+          buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
-          # 루트 권한 실행 시 발생할 수 있는 오류 방지
+          BUILDOZER_WARN_ON_ROOT: 0
           USER: root
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-App-Success
+          name: PristonTale-App-Final
           path: bin/*.apk
