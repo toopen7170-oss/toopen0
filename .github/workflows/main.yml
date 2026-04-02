@@ -3,25 +3,21 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04 # 최신 안정화 버전 사용
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      # 1. 소스 코드 가져오기 (공식 v4 버전)
+      - uses: actions/checkout@v4
 
-      - name: Get Date
-        id: get-date
-        run: |
-          echo "::set-output name=date::$(date +'%Y-%m-%d')"
-        shell: bash
-
+      # 2. 빌도저로 안드로이드 앱 빌드 (공식 v1 버전)
       - name: Build with Buildozer
-        # 검증된 공식 빌도저 액션으로 교체했습니다.
-        uses: Enteee/buildozer-action@v1.1.2
+        uses: ArtemSerebriakov/buildozer-action@v1
         with:
           command: buildozer android debug
           repository_root: .
 
+      # 3. 생성된 APK 파일 저장 (공식 v4 버전)
       - name: Upload APK
-        uses: actions/actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: toopen0-app-${{ steps.get-date.outputs.date }}
+          name: PristonTale-App
           path: bin/*.apk
