@@ -3,7 +3,7 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04  # 더 안정적인 22.04 버전을 사용하여 호환성을 높입니다.
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,15 +20,15 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
             build-essential openjdk-17-jdk python3-dev
           pip install --upgrade pip
-          # 빌드에 필요한 핵심 파이썬 도구들 설치
+          # Cython과 Buildozer를 설치합니다.
           pip install "Cython<3.0" buildozer kivy pillow
 
       - name: Build with Buildozer
         run: |
-          # SDK 라이선스 자동 수락 설정
+          # 라이선스 자동 수락을 위한 폴더 생성
           mkdir -p ~/.android && touch ~/.android/repositories.cfg
-          # 빌드 전 이전 찌꺼기 제거 (clean) 후 빌드 시작
-          buildozer android clean
+          # clean 명령을 제외하고 바로 debug 빌드를 시작합니다.
+          # 빌도저가 알아서 필요한 폴더를 만들며 진행할 것입니다.
           buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
@@ -39,5 +39,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-App-Final-v3
+          name: PristonTale-App-Final-v4
           path: bin/*.apk
