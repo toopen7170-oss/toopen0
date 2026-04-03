@@ -17,7 +17,7 @@ from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.config import Config
 
-# --- 1. 폰트 깨짐 해결 (Kivy 기본 폰트 강제 변경) ---
+# --- 1. 폰트 깨짐 완벽 방어 (경로 및 엔진 설정) ---
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -26,17 +26,20 @@ def resource_path(relative_path):
 FONT_PATH = resource_path("font.ttf")
 
 if os.path.exists(FONT_PATH):
-    # Kivy가 한글을 인식하도록 기본 폰트 경로 등록
     LabelBase.register(name="Korean", fn_regular=FONT_PATH)
-    # 시스템 전체 기본 폰트 설정 변경
     Config.set('kivy', 'default_font', ['Korean', FONT_PATH])
     DEFAULT_FONT = "Korean"
 else:
     DEFAULT_FONT = None
 
-# 배경색 설정
+# 배경색 및 데이터 저장소
 Window.clearcolor = (0.05, 0.05, 0.05, 1)
 store = JsonStore('priston_v3.json')
+
+# --- 2. 안드로이드 사진 권한 요청 (사진 안 보임 해결) ---
+if platform == 'android':
+    from android.permissions import request_permissions, Permission
+    request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
 
 class StyledButton(Button):
     def __init__(self, **kwargs):
@@ -129,7 +132,6 @@ class CharSelect(Screen):
             grid.add_widget(btn)
         layout.add_widget(grid)
         
-        # --- 1. 뒤로가기 버튼 추가 ---
         btn_b = StyledButton(text="메인으로 돌아가기", background_color=(0.4, 0.4, 0.4, 1))
         btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
         layout.add_widget(btn_b)
@@ -186,10 +188,10 @@ class Detail(Screen):
         layout.add_widget(btn_b)
         sc.add_widget(layout); self.add_widget(sc)
 
-    # --- 2. 사진 모드 필터링 강화 ---
     def get_pic(self, *args):
-        fc = FileChooserIconView(path='/sdcard' if platform == 'android' else '.')
-        fc.filters = ['*.png', '*.jpg', '*.jpeg'] # 사진 파일만 보이게 필터
+        # 경로 설정을 위해 기본 경로를 sdcard로 고정
+        start_path = '/sdcard' if platform == 'android' else '.'
+        fc = FileChooserIconView(path=start_path, filters=['*.png', '*.jpg', '*.jpeg'])
         btn = Button(text="선택 완료", size_hint_y=0.15, font_name=DEFAULT_FONT)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn)
         pop = Popup(title="이미지 선택", content=content, size_hint=(0.9, 0.9))
@@ -213,10 +215,21 @@ class Inventory(Screen):
         char_data = store.get(acc)['chars'].get(idx, {})
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
         layout.add_widget(Label(text=f"[{char_data.get('이름', '캐릭터')}] 인벤", font_name=DEFAULT_FONT, size_hint_y=0.1))
+        
         self.ti = TextInput(text=char_data.get('inventory', ''), multiline=True, font_name=DEFAULT_FONT)
         layout.add_widget(self.ti)
+        
+        # --- 3. 인벤토리 저장 및 뒤로가기 버튼 ---
+        btn_row = BoxLayout(size_hint_y=None, height=130, spacing=10)
         btn_s = StyledButton(text="저장", background_color=(0.1, 0.5, 0.2, 1))
-        btn_s.bind(on_release=self.save); layout.add_widget(btn_s)
+        btn_s.bind(on_release=self.save)
+        
+        btn_b = StyledButton(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1))
+        btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
+        
+        btn_row.add_widget(btn_s)
+        btn_row.add_widget(btn_b)
+        layout.add_widget(btn_row)
         self.add_widget(layout)
 
     def save(self, *args):
