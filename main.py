@@ -15,38 +15,27 @@ from kivy.uix.popup import Popup
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
 from kivy.utils import platform
+from kivy.config import Config
+
+# --- 1. 폰트 깨짐 해결 (Kivy 기본 폰트 강제 변경) ---
+def resource_path(relative_path):
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+FONT_PATH = resource_path("font.ttf")
+
+if os.path.exists(FONT_PATH):
+    # Kivy가 한글을 인식하도록 기본 폰트 경로 등록
+    LabelBase.register(name="Korean", fn_regular=FONT_PATH)
+    # 시스템 전체 기본 폰트 설정 변경
+    Config.set('kivy', 'default_font', ['Korean', FONT_PATH])
+    DEFAULT_FONT = "Korean"
+else:
+    DEFAULT_FONT = None
 
 # 배경색 설정
 Window.clearcolor = (0.05, 0.05, 0.05, 1)
-
-# --- 1. 폰트 문제 해결 (안드로이드 시스템 폰트까지 3중 추적) ---
-def setup_korean_font():
-    font_name = "font.ttf"
-    # 시도 1: 앱 패키지 내부 경로
-    path1 = os.path.join(os.path.dirname(os.path.abspath(__file__)), font_name)
-    # 시도 2: 현재 작업 디렉토리
-    path2 = os.path.join(os.getcwd(), font_name)
-    
-    selected_path = None
-    if os.path.exists(path1): selected_path = path1
-    elif os.path.exists(path2): selected_path = path2
-    
-    if selected_path:
-        LabelBase.register(name="Korean", fn_regular=selected_path)
-        return "Korean"
-    
-    # 시도 3: 안드로이드 기본 한글 폰트 강제 로드 (파일이 없을 경우 대비)
-    if platform == 'android':
-        sys_fonts = ["/system/fonts/NanumGothic.ttf", "/system/fonts/DroidSansFallback.ttf"]
-        for f in sys_fonts:
-            if os.path.exists(f):
-                LabelBase.register(name="Korean", fn_regular=f)
-                return "Korean"
-    return None
-
-DEFAULT_FONT = setup_korean_font()
-
-# 데이터 저장소
 store = JsonStore('priston_v3.json')
 
 class StyledButton(Button):
@@ -64,7 +53,6 @@ class MainMenu(Screen):
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.layout.add_widget(Label(text="[PT1 통합 검색]", font_size='28sp', font_name=DEFAULT_FONT, size_hint_y=0.1))
         
-        # 검색창
         search_box = BoxLayout(size_hint_y=0.1, spacing=10)
         self.search_ti = TextInput(hint_text="검색어 입력...", multiline=False, font_name=DEFAULT_FONT)
         btn_search = Button(text="검색", size_hint_x=0.25, font_name=DEFAULT_FONT)
@@ -73,7 +61,6 @@ class MainMenu(Screen):
         search_box.add_widget(btn_search)
         self.layout.add_widget(search_box)
 
-        # 추가 버튼
         btn_add = StyledButton(text="+ 새 계정 만들기", background_color=(0.1, 0.5, 0.2, 1))
         btn_add.bind(on_release=self.add_popup)
         self.layout.add_widget(btn_add)
@@ -127,7 +114,6 @@ class CharSelect(Screen):
         data = store.get(acc)
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
         
-        # --- 삭제 버튼 복구 영역 ---
         head = BoxLayout(size_hint_y=0.12, spacing=10)
         head.add_widget(Label(text=f"[{acc}]", font_name=DEFAULT_FONT, font_size='20sp'))
         btn_del_acc = Button(text="계정 삭제", size_hint_x=0.3, background_color=(0.8, 0.2, 0.2, 1), font_name=DEFAULT_FONT)
@@ -143,25 +129,24 @@ class CharSelect(Screen):
             grid.add_widget(btn)
         layout.add_widget(grid)
         
-        btn_b = StyledButton(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1))
+        # --- 1. 뒤로가기 버튼 추가 ---
+        btn_b = StyledButton(text="메인으로 돌아가기", background_color=(0.4, 0.4, 0.4, 1))
         btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
         layout.add_widget(btn_b)
         self.add_widget(layout)
 
     def confirm_delete(self, *args):
         content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        content.add_widget(Label(text="정말로 이 계정을\n삭제하시겠습니까?", font_name=DEFAULT_FONT, halign='center'))
+        content.add_widget(Label(text="정말로 삭제하시겠습니까?", font_name=DEFAULT_FONT))
         btn_row = BoxLayout(spacing=10)
         btn_y = Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=DEFAULT_FONT)
         btn_n = Button(text="취소", font_name=DEFAULT_FONT)
         btn_row.add_widget(btn_y); btn_row.add_widget(btn_n)
         content.add_widget(btn_row)
         pop = Popup(title="경고", content=content, size_hint=(0.8, 0.4))
-        
         def do_delete(x):
             store.delete(self.manager.current_acc)
             pop.dismiss(); self.manager.current = 'main'
-        
         btn_y.bind(on_release=do_delete); btn_n.bind(on_release=pop.dismiss); pop.open()
 
     def go_detail(self, idx):
@@ -201,11 +186,13 @@ class Detail(Screen):
         layout.add_widget(btn_b)
         sc.add_widget(layout); self.add_widget(sc)
 
+    # --- 2. 사진 모드 필터링 강화 ---
     def get_pic(self, *args):
         fc = FileChooserIconView(path='/sdcard' if platform == 'android' else '.')
-        btn = Button(text="선택", size_hint_y=0.15, font_name=DEFAULT_FONT)
+        fc.filters = ['*.png', '*.jpg', '*.jpeg'] # 사진 파일만 보이게 필터
+        btn = Button(text="선택 완료", size_hint_y=0.15, font_name=DEFAULT_FONT)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn)
-        pop = Popup(title="이미지", content=content, size_hint=(0.9, 0.9))
+        pop = Popup(title="이미지 선택", content=content, size_hint=(0.9, 0.9))
         def sel(x):
             if fc.selection: self.img.source = fc.selection[0]; pop.dismiss()
         btn.bind(on_release=sel); pop.open()
