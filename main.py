@@ -17,7 +17,9 @@ from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.config import Config
 
-# --- 1. 폰트 깨짐 절대 방어 설정 ---
+# --- 1. 폰트 및 키보드 환경 설정 ---
+Window.softinput_mode = "below_target" # 키보드가 입력창을 가리지 않게 설정
+
 def resource_path(relative_path):
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
@@ -25,23 +27,23 @@ def resource_path(relative_path):
 
 FONT_PATH = resource_path("font.ttf")
 
-# 앱 전체에 한글 폰트를 강제로 박아넣습니다.
+# 엔진 레벨에서 폰트 강제 고정 (나눔고딕 적용 대비)
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="Korean", fn_regular=FONT_PATH)
-    Config.set('kivy', 'default_font', ['Korean', FONT_PATH, 'Roboto', 'font.ttf'])
+    Config.set('kivy', 'default_font', ['Korean', FONT_PATH, FONT_PATH, FONT_PATH])
     DEFAULT_FONT = "Korean"
 else:
     DEFAULT_FONT = None
 
-Window.softinput_mode = "below_target" 
 Window.clearcolor = (0.05, 0.05, 0.05, 1)
 store = JsonStore('priston_v3.json')
 
-# 사진 권한
+# 안드로이드 권한 요청
 if platform == 'android':
     from android.permissions import request_permissions, Permission
     request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
 
+# --- 2. 공통 스타일 위젯 ---
 class StyledButton(Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -51,17 +53,24 @@ class StyledButton(Button):
         self.background_normal = ''
         self.background_color = (0.15, 0.3, 0.6, 1)
 
+class StyledInput(TextInput):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.font_name = DEFAULT_FONT
+        self.multiline = False
+        self.cursor_color = (1, 1, 1, 1)
+
+# --- 3. 화면 구성 ---
 class MainMenu(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.layout.add_widget(Label(text="[PT1 통합 검색]", font_size='28sp', font_name=DEFAULT_FONT, size_hint_y=0.1))
         
-        # 검색창 레이아웃
         search_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        self.search_ti = TextInput(hint_text="검색어 입력...", multiline=False, font_name=DEFAULT_FONT)
+        self.search_ti = StyledInput(hint_text="계정 또는 캐릭터명 검색...")
         btn_search = Button(text="검색", size_hint_x=0.3, font_name=DEFAULT_FONT, background_color=(0.2, 0.6, 0.8, 1))
-        btn_search.bind(on_release=self.refresh) # 검색 버튼 클릭 시 리프레시 실행
+        btn_search.bind(on_release=self.refresh)
         search_box.add_widget(self.search_ti)
         search_box.add_widget(btn_search)
         self.layout.add_widget(search_box)
@@ -80,25 +89,16 @@ class MainMenu(Screen):
     def on_enter(self): self.refresh()
 
     def refresh(self, *args):
-        # --- 2. 검색 기능 수정 (필터링 강화) ---
         self.acc_grid.clear_widgets()
         query = self.search_ti.text.strip().lower()
-        
         for acc in store.keys():
             data = store.get(acc)
             is_match = False
-            
-            # 계정 이름 검색
-            if not query or query in acc.lower():
-                is_match = True
-            # 캐릭터 이름들 검색
+            if not query or query in acc.lower(): is_match = True
             else:
                 for i in range(1, 7):
-                    char_name = data.get('chars', {}).get(str(i), {}).get('이름', '').lower()
-                    if query in char_name:
-                        is_match = True
-                        break
-            
+                    c_name = data.get('chars', {}).get(str(i), {}).get('이름', '').lower()
+                    if query in c_name: is_match = True; break
             if is_match:
                 btn = StyledButton(text=f"계정: {acc}")
                 btn.bind(on_release=lambda x, a=acc: self.go_acc(a))
@@ -106,7 +106,7 @@ class MainMenu(Screen):
 
     def add_popup(self, *args):
         content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        inp = TextInput(hint_text="계정 이름", multiline=False, font_name=DEFAULT_FONT, size_hint_y=None, height=120)
+        inp = StyledInput(hint_text="계정 이름", size_hint_y=None, height=120)
         btn = StyledButton(text="생성", background_color=(0.1, 0.5, 0.2, 1))
         content.add_widget(inp); content.add_widget(btn)
         pop = Popup(title="계정 추가", content=content, size_hint=(0.8, 0.4))
@@ -126,14 +126,12 @@ class CharSelect(Screen):
         acc = self.manager.current_acc
         data = store.get(acc)
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
-        
         head = BoxLayout(size_hint_y=0.12, spacing=10)
         head.add_widget(Label(text=f"[{acc}]", font_name=DEFAULT_FONT, font_size='20sp'))
         btn_del_acc = Button(text="계정 삭제", size_hint_x=0.3, background_color=(0.8, 0.2, 0.2, 1), font_name=DEFAULT_FONT)
         btn_del_acc.bind(on_release=self.confirm_delete)
         head.add_widget(btn_del_acc)
         layout.add_widget(head)
-        
         grid = GridLayout(cols=2, spacing=10)
         for i in range(1, 7):
             c_data = data['chars'].get(str(i), {})
@@ -141,7 +139,6 @@ class CharSelect(Screen):
             btn.bind(on_release=lambda x, idx=i: self.go_detail(idx))
             grid.add_widget(btn)
         layout.add_widget(grid)
-        
         btn_b = StyledButton(text="메인으로 돌아가기", background_color=(0.4, 0.4, 0.4, 1))
         btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
         layout.add_widget(btn_b)
@@ -178,8 +175,8 @@ class Detail(Screen):
         for f in fields:
             r = BoxLayout(size_hint_y=None, height=85, spacing=10)
             r.add_widget(Label(text=f, size_hint_x=0.3, font_name=DEFAULT_FONT))
-            ti = TextInput(text=str(self.char_data.get(f, '')), multiline=False, font_name=DEFAULT_FONT)
-            ti.bind(focus=self.on_focus) 
+            ti = StyledInput(text=str(self.char_data.get(f, '')))
+            ti.bind(focus=self.on_focus) # 포커스 시 자동 스크롤
             self.ins[f] = ti; r.add_widget(ti); self.layout.add_widget(r)
 
         btn_s = StyledButton(text="저장", background_color=(0.1, 0.5, 0.2, 1))
@@ -217,8 +214,8 @@ class Inventory(Screen):
         acc, idx = self.manager.current_acc, self.manager.current_idx
         char_data = store.get(acc)['chars'].get(idx, {})
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
-        layout.add_widget(Label(text=f"[{char_data.get('이름', '캐릭터')}] 인벤", font_name=DEFAULT_FONT, size_hint_y=0.1))
-        self.ti = TextInput(text=char_data.get('inventory', ''), multiline=True, font_name=DEFAULT_FONT)
+        layout.add_widget(Label(text=f"[{char_data.get('이름', '캐릭터')}] 인벤토리", font_name=DEFAULT_FONT, size_hint_y=0.1))
+        self.ti = StyledInput(text=char_data.get('inventory', ''), multiline=True) # 인벤은 멀티라인 허용
         layout.add_widget(self.ti)
         btn_row = BoxLayout(size_hint_y=None, height=130, spacing=10)
         btn_s = StyledButton(text="저장", background_color=(0.1, 0.5, 0.2, 1)); btn_s.bind(on_release=self.save)
