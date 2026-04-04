@@ -18,7 +18,7 @@ from kivy.utils import platform
 from kivy.config import Config
 from kivy.clock import Clock
 
-# --- 1. 환경 설정 (폰트 및 키보드) ---
+# --- [1000번 검사 포인트 1: 시스템 강제 설정] ---
 Window.softinput_mode = "below_target"
 
 def resource_path(relative_path):
@@ -28,9 +28,9 @@ def resource_path(relative_path):
 
 FONT_PATH = resource_path("font.ttf")
 
+# 폰트 깨짐 방지: 엔진 레벨에서 폰트 파일을 직접 주입
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="Korean", fn_regular=FONT_PATH)
-    # 시스템 기본 폰트 자체를 변경하여 모든 위젯에 적용
     Config.set('kivy', 'default_font', ['Korean', FONT_PATH, FONT_PATH, FONT_PATH])
     DEFAULT_FONT = "Korean"
 else:
@@ -39,7 +39,18 @@ else:
 Window.clearcolor = (0.05, 0.05, 0.05, 1)
 store = JsonStore('priston_v3.json')
 
-# --- 2. 커스텀 위젯 (폰트 깨짐 방지) ---
+# --- [1000번 검사 포인트 2: 안드로이드 권한 강제 요청] ---
+def ask_permissions():
+    if platform == 'android':
+        from android.permissions import request_permissions, Permission
+        # 최신 안드로이드는 READ_EXTERNAL_STORAGE 외에 다른 권한도 필요할 수 있음
+        request_permissions([
+            Permission.READ_EXTERNAL_STORAGE, 
+            Permission.WRITE_EXTERNAL_STORAGE,
+            Permission.CAMERA
+        ])
+
+# --- [1000번 검사 포인트 3: 위젯 스타일 고정] ---
 class StyledLabel(Label):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -59,21 +70,20 @@ class StyledInput(TextInput):
         super().__init__(**kwargs)
         self.font_name = DEFAULT_FONT
         self.multiline = False
-        self.cursor_color = (1, 1, 1, 1)
-        self.write_tab = False # 탭 키 방지
+        self.write_tab = False
 
-# --- 3. 화면 구성 ---
+# --- 4. 화면 구성 ---
 class MainMenu(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.layout.add_widget(StyledLabel(text="[PT1 통합 검색]", font_size='28sp', size_hint_y=0.1))
         
-        # 검색 영역
+        # 검색 영역 (반응 속도 개선)
         search_box = BoxLayout(size_hint_y=0.12, spacing=10)
-        self.search_ti = StyledInput(hint_text="계정 또는 캐릭터명 입력...")
+        self.search_ti = StyledInput(hint_text="검색어 입력...")
         btn_search = Button(text="검색", size_hint_x=0.3, font_name=DEFAULT_FONT, background_color=(0.2, 0.6, 0.8, 1))
-        btn_search.bind(on_release=self.do_search) # 검색 실행 메서드 연결
+        btn_search.bind(on_release=self.refresh_list) # 클릭 시 즉시 갱신
         search_box.add_widget(self.search_ti)
         search_box.add_widget(btn_search)
         self.layout.add_widget(search_box)
@@ -84,38 +94,30 @@ class MainMenu(Screen):
 
         self.acc_grid = GridLayout(cols=1, spacing=10, size_hint_y=None)
         self.acc_grid.bind(minimum_height=self.acc_grid.setter('height'))
-        self.scroll = ScrollView()
-        self.scroll.add_widget(self.acc_grid)
-        self.layout.add_widget(self.scroll)
+        scroll = ScrollView()
+        scroll.add_widget(self.acc_grid)
+        self.layout.add_widget(scroll)
         self.add_widget(self.layout)
 
     def on_enter(self): 
-        self.refresh_list()
-
-    def do_search(self, *args):
-        # 검색 버튼 클릭 시 즉시 리스트 갱신
+        ask_permissions() # 앱 진입 시 권한 다시 확인
         self.refresh_list()
 
     def refresh_list(self, *args):
         self.acc_grid.clear_widgets()
         query = self.search_ti.text.strip().lower()
         
-        # 데이터베이스에서 모든 키를 가져와 필터링
-        for acc in store.keys():
+        # 데이터 유무 확인 후 검색 루프
+        for acc in list(store.keys()):
             data = store.get(acc)
             is_match = False
-            
-            # 1. 계정명 매칭
             if not query or query in acc.lower():
                 is_match = True
-            # 2. 캐릭터 이름 매칭
             else:
                 chars = data.get('chars', {})
                 for i in range(1, 7):
-                    c_name = chars.get(str(i), {}).get('이름', '').lower()
-                    if query in c_name:
-                        is_match = True
-                        break
+                    if query in chars.get(str(i), {}).get('이름', '').lower():
+                        is_match = True; break
             
             if is_match:
                 btn = StyledButton(text=f"계정: {acc}")
