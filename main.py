@@ -16,8 +16,9 @@ from kivy.core.text import LabelBase
 from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.config import Config
+from kivy.clock import Clock
 
-# --- 1. 폰트 및 키보드 환경 설정 ---
+# --- 1. 환경 설정 (폰트 및 키보드) ---
 Window.softinput_mode = "below_target"
 
 def resource_path(relative_path):
@@ -27,9 +28,9 @@ def resource_path(relative_path):
 
 FONT_PATH = resource_path("font.ttf")
 
-# 앱 엔진의 기본 폰트를 아예 font.ttf로 고정 (이게 가장 강력합니다)
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="Korean", fn_regular=FONT_PATH)
+    # 시스템 기본 폰트 자체를 변경하여 모든 위젯에 적용
     Config.set('kivy', 'default_font', ['Korean', FONT_PATH, FONT_PATH, FONT_PATH])
     DEFAULT_FONT = "Korean"
 else:
@@ -38,11 +39,7 @@ else:
 Window.clearcolor = (0.05, 0.05, 0.05, 1)
 store = JsonStore('priston_v3.json')
 
-if platform == 'android':
-    from android.permissions import request_permissions, Permission
-    request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
-
-# --- 2. 폰트 깨짐 방지용 커스텀 위젯 ---
+# --- 2. 커스텀 위젯 (폰트 깨짐 방지) ---
 class StyledLabel(Label):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -60,9 +57,10 @@ class StyledButton(Button):
 class StyledInput(TextInput):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.font_name = DEFAULT_FONT # 입력창 한글 깨짐 방지
+        self.font_name = DEFAULT_FONT
         self.multiline = False
-        self.hint_text_color = (0.5, 0.5, 0.5, 1)
+        self.cursor_color = (1, 1, 1, 1)
+        self.write_tab = False # 탭 키 방지
 
 # --- 3. 화면 구성 ---
 class MainMenu(Screen):
@@ -71,11 +69,11 @@ class MainMenu(Screen):
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.layout.add_widget(StyledLabel(text="[PT1 통합 검색]", font_size='28sp', size_hint_y=0.1))
         
-        search_box = BoxLayout(size_hint_y=0.1, spacing=10)
-        self.search_ti = StyledInput(hint_text="계정 또는 캐릭터명 검색...")
-        btn_search = StyledButton(text="검색", size_hint_x=0.3, background_color=(0.2, 0.6, 0.8, 1))
-        btn_search.height = 110 # 검색버튼 높이 조정
-        btn_search.bind(on_release=self.refresh)
+        # 검색 영역
+        search_box = BoxLayout(size_hint_y=0.12, spacing=10)
+        self.search_ti = StyledInput(hint_text="계정 또는 캐릭터명 입력...")
+        btn_search = Button(text="검색", size_hint_x=0.3, font_name=DEFAULT_FONT, background_color=(0.2, 0.6, 0.8, 1))
+        btn_search.bind(on_release=self.do_search) # 검색 실행 메서드 연결
         search_box.add_widget(self.search_ti)
         search_box.add_widget(btn_search)
         self.layout.add_widget(search_box)
@@ -86,30 +84,36 @@ class MainMenu(Screen):
 
         self.acc_grid = GridLayout(cols=1, spacing=10, size_hint_y=None)
         self.acc_grid.bind(minimum_height=self.acc_grid.setter('height'))
-        scroll = ScrollView()
-        scroll.add_widget(self.acc_grid)
-        self.layout.add_widget(scroll)
+        self.scroll = ScrollView()
+        self.scroll.add_widget(self.acc_grid)
+        self.layout.add_widget(self.scroll)
         self.add_widget(self.layout)
 
-    def on_enter(self): self.refresh()
+    def on_enter(self): 
+        self.refresh_list()
 
-    def refresh(self, *args):
+    def do_search(self, *args):
+        # 검색 버튼 클릭 시 즉시 리스트 갱신
+        self.refresh_list()
+
+    def refresh_list(self, *args):
         self.acc_grid.clear_widgets()
-        query = self.search_ti.text.strip().lower() # 공백 제거 및 소문자화
+        query = self.search_ti.text.strip().lower()
         
+        # 데이터베이스에서 모든 키를 가져와 필터링
         for acc in store.keys():
             data = store.get(acc)
             is_match = False
             
-            # 1. 계정명 검색
+            # 1. 계정명 매칭
             if not query or query in acc.lower():
                 is_match = True
-            # 2. 계정 내 캐릭터 이름 검색 (캐릭터가 있을 경우)
+            # 2. 캐릭터 이름 매칭
             else:
                 chars = data.get('chars', {})
                 for i in range(1, 7):
-                    char_info = chars.get(str(i), {})
-                    if query in char_info.get('이름', '').lower():
+                    c_name = chars.get(str(i), {}).get('이름', '').lower()
+                    if query in c_name:
                         is_match = True
                         break
             
@@ -120,14 +124,14 @@ class MainMenu(Screen):
 
     def add_popup(self, *args):
         content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        inp = StyledInput(hint_text="계정 이름", size_hint_y=None, height=120)
+        inp = StyledInput(hint_text="계정 이름")
         btn = StyledButton(text="생성", background_color=(0.1, 0.5, 0.2, 1))
         content.add_widget(inp); content.add_widget(btn)
         pop = Popup(title="계정 추가", content=content, size_hint=(0.8, 0.4))
         def save(x):
             if inp.text.strip():
                 store.put(inp.text.strip(), chars={str(i): {"이름": f"슬롯 {i}"} for i in range(1, 7)})
-                pop.dismiss(); self.refresh()
+                pop.dismiss(); self.refresh_list()
         btn.bind(on_release=save); pop.open()
 
     def go_acc(self, acc):
@@ -142,9 +146,9 @@ class CharSelect(Screen):
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
         head = BoxLayout(size_hint_y=0.12, spacing=10)
         head.add_widget(StyledLabel(text=f"[{acc}]", font_size='20sp'))
-        btn_del_acc = Button(text="계정 삭제", size_hint_x=0.3, background_color=(0.8, 0.2, 0.2, 1), font_name=DEFAULT_FONT)
-        btn_del_acc.bind(on_release=self.confirm_delete)
-        head.add_widget(btn_del_acc)
+        btn_del = Button(text="삭제", size_hint_x=0.2, background_color=(0.8, 0.2, 0.2, 1), font_name=DEFAULT_FONT)
+        btn_del.bind(on_release=self.confirm_delete)
+        head.add_widget(btn_del)
         layout.add_widget(head)
         grid = GridLayout(cols=2, spacing=10)
         for i in range(1, 7):
@@ -153,7 +157,7 @@ class CharSelect(Screen):
             btn.bind(on_release=lambda x, idx=i: self.go_detail(idx))
             grid.add_widget(btn)
         layout.add_widget(grid)
-        btn_b = StyledButton(text="메인으로 돌아가기", background_color=(0.4, 0.4, 0.4, 1))
+        btn_b = StyledButton(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1))
         btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
         layout.add_widget(btn_b)
         self.add_widget(layout)
@@ -193,7 +197,7 @@ class Detail(Screen):
         self.layout.add_widget(btn_b)
         self.sc.add_widget(self.layout); self.add_widget(self.sc)
     def on_focus(self, instance, value):
-        if value: self.sc.scroll_to(instance)
+        if value: Clock.schedule_once(lambda dt: self.sc.scroll_to(instance), 0.2)
     def get_pic(self, *args):
         start_path = '/sdcard' if platform == 'android' else '.'
         fc = FileChooserIconView(path=start_path, filters=['*.png', '*.jpg', '*.jpeg'])
@@ -220,11 +224,11 @@ class Inventory(Screen):
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
         layout.add_widget(StyledLabel(text=f"[{char_data.get('이름', '캐릭터')}] 인벤토리", size_hint_y=0.1))
         self.ti = StyledInput(text=char_data.get('inventory', ''))
-        self.ti.multiline = True # 인벤토리는 여러 줄 가능하게 다시 설정
+        self.ti.multiline = True 
         layout.add_widget(self.ti)
         btn_row = BoxLayout(size_hint_y=None, height=130, spacing=10)
         btn_s = StyledButton(text="저장", background_color=(0.1, 0.5, 0.2, 1)); btn_s.bind(on_release=self.save)
-        btn_b = StyledButton(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1))
+        btn_b = StyledButton(text="뒤로", background_color=(0.4, 0.4, 0.4, 1))
         btn_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
         btn_row.add_widget(btn_s); btn_row.add_widget(btn_b)
         layout.add_widget(btn_row)
