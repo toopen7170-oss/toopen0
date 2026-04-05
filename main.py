@@ -16,19 +16,19 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- 1. 환경 및 권한 설정 ---
-# 키보드 대응 모드 설정
+# --- 1. 시스템 설정 ---
+# 입력창 터치 시 화면을 입력창 아래까지만 조정 (가장 안정적인 모드)
 Window.softinput_mode = "below_target"
 
-# 안드로이드 사진 권한 요청 로직 (사진 허용 문제 해결)
+# 안드로이드 사진첩 접근 권한 강제 요청
 if platform == 'android':
     try:
         from android.permissions import request_permissions, Permission
-        # 읽기/쓰기 권한 모두 요청
         request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
     except Exception as e:
-        print(f"권한 요청 실패: {e}")
+        print(f"Permission Error: {e}")
 
+# 폰트 로드
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
@@ -37,8 +37,10 @@ if os.path.exists(FONT_FILE):
 else:
     DF = None
 
+# 데이터 저장소
 store = JsonStore('priston_v1_1.json')
 
+# --- 2. 공용 커스텀 위젯 ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -54,7 +56,8 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 메인 화면 ---
+# --- 3. 화면 구성 ---
+
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -111,16 +114,25 @@ class MainMenu(Screen):
         no.bind(on_release=pop.dismiss); pop.open()
 
     def add_pop(self, *a):
-        c = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        inp = SInput(hint_text="계정 이름")
-        btn = SBtn(text="생성", background_color=(0.1, 0.7, 0.3, 1))
-        c.add_widget(inp); c.add_widget(btn)
-        pop = Popup(title="계정 추가", content=content, size_hint=(0.8, 0.4))
-        def save(x):
-            if inp.text.strip():
-                store.put(inp.text.strip(), chars={str(i): {"이름": f"슬롯 {i}"} for i in range(1, 7)})
-                pop.dismiss(); self.refresh()
-        btn.bind(on_release=save); pop.open()
+        # --- [수정 완료] 튕김 방지를 위해 변수 참조 오류 해결 ---
+        pop_layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        name_input = SInput(hint_text="새 계정 이름 입력")
+        create_btn = SBtn(text="계정 생성", background_color=(0.1, 0.7, 0.3, 1))
+        
+        pop_layout.add_widget(name_input)
+        pop_layout.add_widget(create_btn)
+        
+        add_popup = Popup(title="계정 추가", content=pop_layout, size_hint=(0.8, 0.4))
+        
+        def save_new_account(instance):
+            acc_name = name_input.text.strip()
+            if acc_name:
+                store.put(acc_name, chars={str(i): {"이름": f"슬롯 {i}"} for i in range(1, 7)})
+                add_popup.dismiss()
+                self.refresh()
+        
+        create_btn.bind(on_release=save_new_account)
+        add_popup.open()
 
     def go(self, n):
         self.manager.cur_acc = n; self.manager.current = 'char_select'
@@ -145,7 +157,6 @@ class CharSelect(Screen):
     def go_d(self, i):
         self.manager.cur_idx = str(i); self.manager.current = 'detail'
 
-# --- 상세 정보 (스크롤 위치 수정) ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -173,10 +184,8 @@ class Detail(Screen):
             row = BoxLayout(size_hint_y=None, height=120, spacing=10)
             row.add_widget(Label(text=f, font_name=DF, size_hint_x=0.3))
             ti = SInput(text=str(self.char_data.get(f, '')))
-            
-            # 스크롤 최적화: padding 값을 100으로 설정
-            ti.bind(focus=self.focus_scroll)
-            
+            # --- [수정 완료] Padding=100 적용 ---
+            ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: self.sc.scroll_to(inst, padding=100), 0.1) if val else None)
             self.ins[f] = ti; row.add_widget(ti); self.l.add_widget(row)
         
         sv = SBtn(text="캐릭터 저장", background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
@@ -186,42 +195,28 @@ class Detail(Screen):
         self.sc.add_widget(self.l)
         self.add_widget(self.sc)
 
-    def focus_scroll(self, instance, value):
-        if value:
-            # padding을 50에서 100으로 키웠습니다. (글씨가 키보드 위로 더 많이 올라옴)
-            Clock.schedule_once(lambda dt: self.sc.scroll_to(instance, padding=100), 0.1)
-
     def get_pic(self, *a):
-        # 안드로이드 내부 저장소 접근 허용을 위한 로직
-        if platform == 'android':
-            from kivy.uix.filechooser import FileChooserIconView
-            p_path = '/sdcard' # 안드로이드 기본 저장소 경로
-        else:
-            from kivy.uix.filechooser import FileChooserIconView
-            p_path = '.'
-            
+        from kivy.uix.filechooser import FileChooserIconView
+        p_path = '/sdcard' if platform == 'android' else '.'
         fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png', '*.jpeg'])
-        btn = Button(text="선택", size_hint_y=0.2, font_name=DF)
+        btn = Button(text="이 사진으로 결정", size_hint_y=0.2, font_name=DF)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn)
-        pop = Popup(title="사진 선택", content=content, size_hint=(0.9, 0.9))
-        def sel(x):
+        pic_popup = Popup(title="사진 선택", content=content, size_hint=(0.9, 0.9))
+        def apply_pic(x):
             if fc.selection:
-                self.img.source = fc.selection[0] # 선택한 사진 적용
-                pop.dismiss()
-        btn.bind(on_release=sel); pop.open()
+                self.img.source = fc.selection[0]
+                pic_popup.dismiss()
+        btn.bind(on_release=apply_pic); pic_popup.open()
 
     def save(self, *a):
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
         d = store.get(acc)
         new_c = {f: ti.text for f, ti in self.ins.items()}
         new_c['img'] = self.img.source
-        new_char_name = self.ins["이름"].text.strip()
-        new_c['이름'] = new_char_name if new_char_name else f"슬롯 {idx}"
         new_c['inventory'] = self.char_data.get('inventory', '')
         d['chars'][idx] = new_c
         store.put(acc, **d); self.manager.current = 'char_select'
 
-# --- 인벤토리 ---
 class Inventory(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -233,8 +228,8 @@ class Inventory(Screen):
         sc = ScrollView()
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
-        self.ti.height = 1500
-        # 인벤토리도 적당히 올라오게 수정
+        self.ti.height = 1800
+        # --- [수정 완료] Padding=100 적용 ---
         self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc.scroll_to(inst, padding=100), 0.1) if val else None)
         sc.add_widget(self.ti); l.add_widget(sc)
         
