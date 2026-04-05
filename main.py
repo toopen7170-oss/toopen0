@@ -1,4 +1,4 @@
-import os
+import os, sys
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -16,9 +16,18 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- 1. 환경 설정 ---
-# 키보드 대응 모드를 "pan"에서 "below_target"으로 변경하여 입력창 가림을 자연스럽게 방지
+# --- 1. 환경 및 권한 설정 ---
+# 키보드 대응 모드 설정
 Window.softinput_mode = "below_target"
+
+# 안드로이드 사진 권한 요청 로직 (사진 허용 문제 해결)
+if platform == 'android':
+    try:
+        from android.permissions import request_permissions, Permission
+        # 읽기/쓰기 권한 모두 요청
+        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
+    except Exception as e:
+        print(f"권한 요청 실패: {e}")
 
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -45,7 +54,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 메인 화면 (검색창 스크롤 조절) ---
+# --- 메인 화면 ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -53,7 +62,6 @@ class MainMenu(Screen):
         self.layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
         self.layout.add_widget(Label(text="[PT1 차트표 v1.1]", font_size='24sp', size_hint_y=0.1, font_name=DF))
         
-        # 검색창 영역 (터치해도 튀어오르지 않게 고정 높이)
         s_box = BoxLayout(size_hint_y=None, height=130, spacing=10)
         self.stti = SInput(hint_text="전체 검색...")
         s_btn = Button(text="검색", font_name=DF, size_hint_x=0.3, background_color=(0.2, 0.6, 1, 1))
@@ -107,7 +115,7 @@ class MainMenu(Screen):
         inp = SInput(hint_text="계정 이름")
         btn = SBtn(text="생성", background_color=(0.1, 0.7, 0.3, 1))
         c.add_widget(inp); c.add_widget(btn)
-        pop = Popup(title="계정 추가", content=c, size_hint=(0.8, 0.4))
+        pop = Popup(title="계정 추가", content=content, size_hint=(0.8, 0.4))
         def save(x):
             if inp.text.strip():
                 store.put(inp.text.strip(), chars={str(i): {"이름": f"슬롯 {i}"} for i in range(1, 7)})
@@ -137,7 +145,7 @@ class CharSelect(Screen):
     def go_d(self, i):
         self.manager.cur_idx = str(i); self.manager.current = 'detail'
 
-# --- 상세 정보 (스크롤 위치 조절 완료) ---
+# --- 상세 정보 (스크롤 위치 수정) ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -166,7 +174,7 @@ class Detail(Screen):
             row.add_widget(Label(text=f, font_name=DF, size_hint_x=0.3))
             ti = SInput(text=str(self.char_data.get(f, '')))
             
-            # 스크롤 과승 방지: padding 값을 낮춰서 적당히만 올라오게 수정
+            # 스크롤 최적화: padding 값을 100으로 설정
             ti.bind(focus=self.focus_scroll)
             
             self.ins[f] = ti; row.add_widget(ti); self.l.add_widget(row)
@@ -180,24 +188,35 @@ class Detail(Screen):
 
     def focus_scroll(self, instance, value):
         if value:
-            # padding을 200에서 50으로 줄였습니다. (너무 위로 솟구치지 않게 함)
-            Clock.schedule_once(lambda dt: self.sc.scroll_to(instance, padding=50), 0.1)
+            # padding을 50에서 100으로 키웠습니다. (글씨가 키보드 위로 더 많이 올라옴)
+            Clock.schedule_once(lambda dt: self.sc.scroll_to(instance, padding=100), 0.1)
 
     def get_pic(self, *a):
-        from kivy.uix.filechooser import FileChooserIconView
-        p_path = '/sdcard' if platform == 'android' else '.'
-        fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png'])
+        # 안드로이드 내부 저장소 접근 허용을 위한 로직
+        if platform == 'android':
+            from kivy.uix.filechooser import FileChooserIconView
+            p_path = '/sdcard' # 안드로이드 기본 저장소 경로
+        else:
+            from kivy.uix.filechooser import FileChooserIconView
+            p_path = '.'
+            
+        fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png', '*.jpeg'])
         btn = Button(text="선택", size_hint_y=0.2, font_name=DF)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn)
         pop = Popup(title="사진 선택", content=content, size_hint=(0.9, 0.9))
-        btn.bind(on_release=lambda x: [setattr(self.img, 'source', fc.selection[0] if fc.selection else self.img.source), pop.dismiss()])
-        pop.open()
+        def sel(x):
+            if fc.selection:
+                self.img.source = fc.selection[0] # 선택한 사진 적용
+                pop.dismiss()
+        btn.bind(on_release=sel); pop.open()
 
     def save(self, *a):
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
         d = store.get(acc)
         new_c = {f: ti.text for f, ti in self.ins.items()}
         new_c['img'] = self.img.source
+        new_char_name = self.ins["이름"].text.strip()
+        new_c['이름'] = new_char_name if new_char_name else f"슬롯 {idx}"
         new_c['inventory'] = self.char_data.get('inventory', '')
         d['chars'][idx] = new_c
         store.put(acc, **d); self.manager.current = 'char_select'
@@ -215,8 +234,8 @@ class Inventory(Screen):
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
         self.ti.height = 1500
-        # 인벤토리도 적당히만 올라오게 수정
-        self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc.scroll_to(inst, padding=50), 0.1) if val else None)
+        # 인벤토리도 적당히 올라오게 수정
+        self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc.scroll_to(inst, padding=100), 0.1) if val else None)
         sc.add_widget(self.ti); l.add_widget(sc)
         
         btns = BoxLayout(size_hint_y=None, height=140, spacing=15)
