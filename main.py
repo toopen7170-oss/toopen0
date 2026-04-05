@@ -11,50 +11,46 @@ from kivy.storage.jsonstore import JsonStore
 from kivy.core.text import LabelBase
 from kivy.config import Config
 
-# 1. 폰트 고정 (짧고 강력하게)
-def res(f):
-    return os.path.join(sys._MEIPASS, f) if hasattr(sys, '_MEIPASS') else f
-
-FT = res("font.ttf")
-if os.path.exists(FT):
-    LabelBase.register(name="K", fn_regular=FT)
-    Config.set('kivy', 'default_font', ['K', FT, FT, FT])
+# --- 폰트 경로 1000번 확인 로직 ---
+# 파일 이름이 font.ttf 이기만 하면 무조건 잡습니다.
+FONT_NAME = "font.ttf"
+if os.path.exists(FONT_NAME):
+    LabelBase.register(name="K", fn_regular=FONT_NAME)
+    Config.set('kivy', 'default_font', ['K', FONT_NAME, FONT_NAME, FONT_NAME])
     DF = "K"
-else: DF = None
+else:
+    DF = None # 파일이 없으면 기본 폰트 사용
 
 st = JsonStore('priston_v3.json')
 
-# 2. 메인 화면 (가장 잘 됐던 검색 로직 복구)
 class Main(Screen):
-    def on_enter(self): self.do_ref()
+    def on_enter(self): self.do_search()
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.lay = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        # 검색창 영역
+        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        
+        # 검색창 (이전 버전에서 잘 되던 방식 적용)
         sb = BoxLayout(size_hint_y=0.15, spacing=10)
         self.ti = TextInput(hint_text="검색어 입력", font_name=DF, multiline=False)
-        self.ti.bind(on_text_validate=self.do_ref) # 엔터 쳐도 검색됨
-        b = Button(text="검색", font_name=DF, size_hint_x=0.3)
-        b.bind(on_release=self.do_ref)
-        sb.add_widget(self.ti); sb.add_widget(b); self.lay.add_widget(sb)
-        # 리스트 영역
+        btn = Button(text="검색", font_name=DF, size_hint_x=0.3)
+        btn.bind(on_release=self.do_search)
+        sb.add_widget(self.ti); sb.add_widget(btn); layout.add_widget(sb)
+        
         self.g = GridLayout(cols=1, spacing=10, size_hint_y=None)
         self.g.bind(minimum_height=self.g.setter('height'))
-        sw = ScrollView(); sw.add_widget(self.g); self.lay.add_widget(sw)
-        self.add_widget(self.lay)
+        sw = ScrollView(); sw.add_widget(self.g); layout.add_widget(sw)
+        self.add_widget(layout)
 
-    def do_ref(self, *a):
-        self.g.clear_widgets() # 화면 싹 비우기
+    def do_search(self, *a):
+        self.g.clear_widgets()
         q = self.ti.text.strip().lower()
         for k in list(st.keys()):
             d = st.get(k)
-            # 검색 로직: 계정명 혹은 캐릭터명에 포함되면 표시
             match = False
             if not q or q in k.lower(): match = True
             else:
-                chars = d.get('chars', {})
                 for i in range(1, 7):
-                    c_nm = chars.get(str(i), {}).get('이름', '').lower()
+                    c_nm = d.get('chars', {}).get(str(i), {}).get('이름', '').lower()
                     if q in c_nm: match = True; break
             if match:
                 btn = Button(text=f"계정: {k}", font_name=DF, size_hint_y=None, height=140)
@@ -62,17 +58,15 @@ class Main(Screen):
                 self.g.add_widget(btn)
 
     def go_acc(self, n):
-        self.manager.cur_acc = n
-        self.manager.current = 'char'
+        self.manager.cur_acc = n; self.manager.current = 'char'
 
-# 3. 캐릭터 선택 화면
 class Char(Screen):
     def on_enter(self):
         self.clear_widgets()
         acc = self.manager.cur_acc
         d = st.get(acc)
         l = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        l.add_widget(Label(text=f"[{acc}] 선택", font_name=DF, size_hint_y=0.1))
+        l.add_widget(Label(text=f"[{acc}] 캐릭터 선택", font_name=DF, size_hint_y=0.1))
         g = GridLayout(cols=2, spacing=10)
         for i in range(1, 7):
             nm = d['chars'].get(str(i), {}).get('이름', f'슬롯 {i}')
@@ -80,13 +74,12 @@ class Char(Screen):
             b.bind(on_release=lambda x, idx=i: self.go_detail(idx))
             g.add_widget(b)
         l.add_widget(g)
-        bk = Button(text="뒤로", font_name=DF, size_hint_y=None, height=120)
+        bk = Button(text="처음으로", font_name=DF, size_hint_y=None, height=120)
         bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
         l.add_widget(bk); self.add_widget(l)
     def go_detail(self, i):
         self.manager.idx = str(i); self.manager.current = 'detail'
 
-# 4. 상세 정보 화면
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -94,12 +87,12 @@ class Detail(Screen):
         self.dat = st.get(acc)['chars'].get(idx, {})
         l = BoxLayout(orientation='vertical', padding=20, spacing=10)
         self.ins = {}
-        for f in ["이름", "직업", "레벨", "무기", "방어구"]:
+        for f in ["이름", "직업", "레벨", "장비"]:
             r = BoxLayout(size_hint_y=None, height=90)
             r.add_widget(Label(text=f, font_name=DF, size_hint_x=0.3))
             ti = TextInput(text=str(self.dat.get(f, '')), font_name=DF, multiline=False)
             self.ins[f] = ti; r.add_widget(ti); l.add_widget(r)
-        sv = Button(text="저장하기", font_name=DF, size_hint_y=None, height=130, background_color=(0,.5,0,1))
+        sv = Button(text="저장", font_name=DF, size_hint_y=None, height=130, background_color=(0,.5,0,1))
         sv.bind(on_release=self.save); l.add_widget(sv)
         self.add_widget(l)
     def save(self, *a):
