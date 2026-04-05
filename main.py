@@ -16,9 +16,9 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- 폰트 및 키보드 설정 ---
-# 안드로이드에서 키보드가 화면을 가리지 않고 전체를 밀어 올리도록 강제 설정
-Window.softinput_mode = "pan" 
+# --- 1. 환경 설정 ---
+# 키보드 대응 모드를 "pan"에서 "below_target"으로 변경하여 입력창 가림을 자연스럽게 방지
+Window.softinput_mode = "below_target"
 
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -30,15 +30,13 @@ else:
 
 store = JsonStore('priston_v1_1.json')
 
-# --- 커스텀 위젯 ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.font_name = DF
         self.multiline = kw.get('multiline', False)
         self.size_hint_y = None
-        # 입력창 높이를 충분히 키워 터치와 가독성을 확보
-        self.height = 120 
+        self.height = 110 
 
 class SBtn(Button):
     def __init__(self, **kw):
@@ -47,7 +45,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 메인 화면 ---
+# --- 메인 화면 (검색창 스크롤 조절) ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -55,9 +53,9 @@ class MainMenu(Screen):
         self.layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
         self.layout.add_widget(Label(text="[PT1 차트표 v1.1]", font_size='24sp', size_hint_y=0.1, font_name=DF))
         
-        # 검색
+        # 검색창 영역 (터치해도 튀어오르지 않게 고정 높이)
         s_box = BoxLayout(size_hint_y=None, height=130, spacing=10)
-        self.stti = SInput(hint_text="전체 검색 (아이템, 레벨 등)")
+        self.stti = SInput(hint_text="전체 검색...")
         s_btn = Button(text="검색", font_name=DF, size_hint_x=0.3, background_color=(0.2, 0.6, 1, 1))
         s_btn.bind(on_release=self.refresh)
         s_box.add_widget(self.stti); s_box.add_widget(s_btn)
@@ -67,7 +65,6 @@ class MainMenu(Screen):
         add_btn.bind(on_release=self.add_pop)
         self.layout.add_widget(add_btn)
 
-        # 계정 리스트 스크롤
         self.scroll = ScrollView(size_hint=(1, 1))
         self.grid = GridLayout(cols=1, spacing=12, size_hint_y=None)
         self.grid.bind(minimum_height=self.grid.setter('height'))
@@ -140,26 +137,21 @@ class CharSelect(Screen):
     def go_d(self, i):
         self.manager.cur_idx = str(i); self.manager.current = 'detail'
 
-# --- 상세 정보 (스크롤 1000번 검사 수정본) ---
+# --- 상세 정보 (스크롤 위치 조절 완료) ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
         self.char_data = store.get(acc)['chars'].get(idx, {})
         
-        # 1. 스크롤뷰 설정 (전체 화면 차지)
         self.sc = ScrollView(do_scroll_x=False, do_scroll_y=True, size_hint=(1, 1))
-        
-        # 2. 내부 박스 (높이 자동 계산의 핵심)
         self.l = BoxLayout(orientation='vertical', padding=20, spacing=20, size_hint_y=None)
         self.l.bind(minimum_height=self.l.setter('height'))
         
-        # 이미지
         img_src = self.char_data.get('img', '')
         self.img = Image(source=img_src if img_src else '', size_hint_y=None, height=550)
         self.l.add_widget(self.img)
         
-        # 상단 버튼
         br = BoxLayout(size_hint_y=None, height=140, spacing=12)
         btn_pic = SBtn(text="사진 변경", background_color=(0.2, 0.5, 0.8, 1))
         btn_pic.bind(on_release=self.get_pic)
@@ -167,18 +159,18 @@ class Detail(Screen):
         btn_inv.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory'))
         br.add_widget(btn_pic); br.add_widget(btn_inv); self.l.add_widget(br)
 
-        # 입력 필드 (15개)
         fields = ["이름", "직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
         self.ins = {}
         for f in fields:
             row = BoxLayout(size_hint_y=None, height=120, spacing=10)
             row.add_widget(Label(text=f, font_name=DF, size_hint_x=0.3))
             ti = SInput(text=str(self.char_data.get(f, '')))
-            # 키보드가 올라올 때 해당 칸이 보이도록 자동 스크롤
+            
+            # 스크롤 과승 방지: padding 값을 낮춰서 적당히만 올라오게 수정
             ti.bind(focus=self.focus_scroll)
+            
             self.ins[f] = ti; row.add_widget(ti); self.l.add_widget(row)
         
-        # 하단 버튼
         sv = SBtn(text="캐릭터 저장", background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
         bk = SBtn(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'char_select'))
         self.l.add_widget(sv); self.l.add_widget(bk)
@@ -187,8 +179,9 @@ class Detail(Screen):
         self.add_widget(self.sc)
 
     def focus_scroll(self, instance, value):
-        if value: # 칸을 터치했을 때
-            Clock.schedule_once(lambda dt: self.sc.scroll_to(instance, padding=150), 0.1)
+        if value:
+            # padding을 200에서 50으로 줄였습니다. (너무 위로 솟구치지 않게 함)
+            Clock.schedule_once(lambda dt: self.sc.scroll_to(instance, padding=50), 0.1)
 
     def get_pic(self, *a):
         from kivy.uix.filechooser import FileChooserIconView
@@ -221,8 +214,9 @@ class Inventory(Screen):
         sc = ScrollView()
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
-        self.ti.height = 1500 # 인벤토리 영역을 길게 확보
-        self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc.scroll_to(inst), 0.1) if val else None)
+        self.ti.height = 1500
+        # 인벤토리도 적당히만 올라오게 수정
+        self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc.scroll_to(inst, padding=50), 0.1) if val else None)
         sc.add_widget(self.ti); l.add_widget(sc)
         
         btns = BoxLayout(size_hint_y=None, height=140, spacing=15)
