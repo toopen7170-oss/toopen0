@@ -15,7 +15,7 @@ from kivy.config import Config
 from kivy.utils import platform
 from kivy.clock import Clock
 
-# --- 폰트 설정 (기존 유지) ---
+# --- 폰트 설정 ---
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
@@ -32,14 +32,14 @@ class SInput(TextInput):
         self.font_name = DF
         self.multiline = kw.get('multiline', False)
         self.size_hint_y = None
-        self.height = 100 # 입력창 높이 고정
+        self.height = 110 # 터치하기 편하게 높이 고정
 
 class SBtn(Button):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.font_name = DF
         self.size_hint_y = None
-        self.height = 140
+        self.height = 145
 
 # --- 메인 화면 ---
 class MainMenu(Screen):
@@ -60,10 +60,10 @@ class MainMenu(Screen):
         add_btn.bind(on_release=self.add_pop)
         self.layout.add_widget(add_btn)
 
-        # 리스트 스크롤 (수정됨)
-        self.scroll = ScrollView(size_hint=(1, 1))
+        # 계정 리스트 스크롤
+        self.scroll = ScrollView()
         self.grid = GridLayout(cols=1, spacing=10, size_hint_y=None)
-        self.grid.bind(minimum_height=self.grid.setter('height')) # 높이 자동 계산
+        self.grid.bind(minimum_height=self.grid.setter('height'))
         self.scroll.add_widget(self.grid)
         self.layout.add_widget(self.scroll)
         self.add_widget(self.layout)
@@ -81,7 +81,7 @@ class MainMenu(Screen):
                     if any(q in str(val).lower() for val in char.values()):
                         match = True; break
             if match:
-                row = BoxLayout(size_hint_y=None, height=145, spacing=5)
+                row = BoxLayout(size_hint_y=None, height=150, spacing=5)
                 acc_btn = SBtn(text=f"계정: {k}", size_hint_x=0.8, background_color=(0.1, 0.2, 0.4, 1))
                 acc_btn.bind(on_release=lambda x, n=k: self.go(n))
                 del_btn = Button(text="X", size_hint_x=0.2, background_color=(0.8, 0.2, 0.2, 1), font_name=DF)
@@ -96,7 +96,7 @@ class MainMenu(Screen):
         ok = Button(text="삭제", background_color=(0.8, 0, 0, 1), font_name=DF)
         no = Button(text="취소", font_name=DF)
         btns.add_widget(ok); btns.add_widget(no); c.add_widget(btns)
-        pop = Popup(title="경고", content=c, size_hint=(0.8, 0.4))
+        pop = Popup(title="주의", content=c, size_hint=(0.8, 0.4))
         ok.bind(on_release=lambda x: [store.delete(n), self.refresh(), pop.dismiss()])
         no.bind(on_release=pop.dismiss); pop.open()
 
@@ -105,7 +105,7 @@ class MainMenu(Screen):
         inp = SInput(hint_text="계정 이름")
         btn = SBtn(text="생성", background_color=(0.1, 0.7, 0.3, 1))
         c.add_widget(inp); c.add_widget(btn)
-        pop = Popup(title="추가", content=c, size_hint=(0.8, 0.4))
+        pop = Popup(title="계정 추가", content=c, size_hint=(0.8, 0.4))
         def save(x):
             if inp.text.strip():
                 store.put(inp.text.strip(), chars={str(i): {"이름": f"슬롯 {i}"} for i in range(1, 7)})
@@ -137,23 +137,26 @@ class CharSelect(Screen):
     def go_d(self, i):
         self.manager.cur_idx = str(i); self.manager.current = 'detail'
 
-# --- 상세 정보 (스크롤 수리 완료) ---
+# --- 상세 정보 (스크롤 완벽 수정) ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
         self.char_data = store.get(acc)['chars'].get(idx, {})
         
-        # 핵심: 스크롤뷰 설정
-        self.sc = ScrollView(size_hint=(1, 1), do_scroll_x=False, do_scroll_y=True)
-        self.l = BoxLayout(orientation='vertical', padding=15, spacing=15, size_hint_y=None)
-        # 중요: minimum_height를 bind해야 스크롤이 작동함
-        self.l.bind(minimum_height=self.l.setter('height'))
+        # 1. 전체를 감싸는 스크롤뷰
+        self.sc = ScrollView(do_scroll_x=False, do_scroll_y=True)
         
+        # 2. 내용이 담길 박스 (높이를 내부 위젯 합계에 맞게 자동 조절)
+        self.l = BoxLayout(orientation='vertical', padding=15, spacing=15, size_hint_y=None)
+        self.l.bind(minimum_height=self.l.setter('height')) # 이 코드가 있어야 스크롤이 작동합니다!
+        
+        # 이미지
         img_src = self.char_data.get('img', '')
         self.img = Image(source=img_src if img_src else '', size_hint_y=None, height=500)
         self.l.add_widget(self.img)
         
+        # 버튼들
         br = BoxLayout(size_hint_y=None, height=130, spacing=10)
         btn_pic = SBtn(text="사진 변경", background_color=(0.2, 0.5, 0.8, 1))
         btn_pic.bind(on_release=self.get_pic)
@@ -161,21 +164,23 @@ class Detail(Screen):
         btn_inv.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory'))
         br.add_widget(btn_pic); br.add_widget(btn_inv); self.l.add_widget(br)
 
+        # 모든 입력 필드
         fields = ["이름", "직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
         self.ins = {}
         for f in fields:
             row = BoxLayout(size_hint_y=None, height=110, spacing=10)
             row.add_widget(Label(text=f, font_name=DF, size_hint_x=0.3))
             ti = SInput(text=str(self.char_data.get(f, '')))
-            ti.bind(focus=self.on_f)
+            ti.bind(focus=self.on_f) # 키보드 대응 자동 스크롤
             self.ins[f] = ti; row.add_widget(ti); self.l.add_widget(row)
         
-        sv = SBtn(text="캐릭터 저장", background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
+        # 저장/뒤로가기
+        sv = SBtn(text="저장하기", background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
         bk = SBtn(text="뒤로가기", background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'char_select'))
         self.l.add_widget(sv); self.l.add_widget(bk)
         
-        self.sc.add_widget(self.l)
-        self.add_widget(self.sc)
+        self.sc.add_widget(self.l) # 스크롤뷰에 내용 박스 넣기
+        self.add_widget(self.sc)   # 화면에 스크롤뷰 표시
 
     def on_f(self, instance, value):
         if value: Clock.schedule_once(lambda dt: self.sc.scroll_to(instance), 0.2)
@@ -186,7 +191,7 @@ class Detail(Screen):
         fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png'])
         btn = Button(text="선택", size_hint_y=0.15, font_name=DF)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn)
-        pop = Popup(title="사진", content=content, size_hint=(0.9, 0.9))
+        pop = Popup(title="사진 선택", content=content, size_hint=(0.9, 0.9))
         def select(x):
             if fc.selection: self.img.source = fc.selection[0]; pop.dismiss()
         btn.bind(on_release=select); pop.open()
@@ -196,8 +201,6 @@ class Detail(Screen):
         d = store.get(acc)
         new_c = {f: ti.text for f, ti in self.ins.items()}
         new_c['img'] = self.img.source
-        new_char_name = self.ins["이름"].text.strip()
-        new_c['이름'] = new_char_name if new_char_name else f"슬롯 {idx}"
         new_c['inventory'] = self.char_data.get('inventory', '')
         d['chars'][idx] = new_c
         store.put(acc, **d); self.manager.current = 'char_select'
@@ -210,12 +213,17 @@ class Inventory(Screen):
         char_data = store.get(acc)['chars'].get(idx, {})
         l = BoxLayout(orientation='vertical', padding=15, spacing=10)
         l.add_widget(Label(text=f"[{char_data.get('이름', '캐릭')}] 인벤토리", font_name=DF, size_hint_y=0.1))
+        
+        # 인벤토리도 스크롤 가능하게
+        sc = ScrollView()
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
-        self.ti.size_hint_y = 0.7
-        l.add_widget(self.ti)
-        btns = BoxLayout(size_hint_y=0.15, spacing=10)
+        self.ti.size_hint_y = None
+        self.ti.height = 1000 # 인벤토리창은 아주 길게 설정
+        sc.add_widget(self.ti); l.add_widget(sc)
+        
+        btns = BoxLayout(size_hint_y=None, height=130, spacing=10)
         sv = Button(text="저장", font_name=DF, background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
-        bk = Button(text="뒤로", font_name=DF, background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
+        bk = Button(text="닫기", font_name=DF, background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
         btns.add_widget(sv); btns.add_widget(bk); l.add_widget(btns); self.add_widget(l)
     def save(self, *a):
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
