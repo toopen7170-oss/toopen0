@@ -1,10 +1,9 @@
 import os, sys
 
-# --- [1단계] 앱 시작 즉시 폰트 강제 설정 (가장 중요) ---
+# --- [폰트 강제 설정] 앱 시작 즉시 적용 ---
 from kivy.config import Config
 FONT_NAME = "font.ttf"
 if os.path.exists(FONT_NAME):
-    # 시스템 전체 기본 폰트를 font.ttf로 고정 (팝업창 깨짐 방지)
     Config.set('kivy', 'default_font', [
         'KFont', 
         FONT_NAME, 
@@ -32,24 +31,36 @@ from kivy.core.window import Window
 # 폰트 등록
 DF = None
 if os.path.exists(FONT_NAME):
-    LabelBase.register(name="KFont", fn_regular=FONT_NAME)
-    DF = "KFont"
+    try:
+        LabelBase.register(name="KFont", fn_regular=FONT_NAME)
+        DF = "KFont"
+    except Exception as e:
+        print(f"Font Reg Error: {e}")
 
-# 키보드 대응
+# 키보드 대응 모드 설정
 Window.softinput_mode = "below_target"
+
+# 데이터 저장소
 store = JsonStore('priston_v1_1.json')
 
-# --- [2단계] 안드로이드 사진 권한 (최신 버전 대응) ---
+# --- [안드로이드 최신 사진 권한 요청 로직 보강] ---
 def request_android_permissions():
     if platform == 'android':
         try:
             from android.permissions import request_permissions, Permission
-            # Android 13 이상과 이하를 모두 커버하는 권한 요청
-            request_permissions([
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE,
-                Permission.CAMERA
-            ])
+            from android import api_version
+            
+            permissions_to_request = [Permission.CAMERA]
+            
+            # Android 13 (API 33) 이상인 경우 별도 사진 권한 필요
+            if api_version >= 33:
+                permissions_to_request.append(Permission.READ_MEDIA_IMAGES)
+            else:
+                # Android 12 이하인 경우 기존 권한 사용
+                permissions_to_request.append(Permission.READ_EXTERNAL_STORAGE)
+                permissions_to_request.append(Permission.WRITE_EXTERNAL_STORAGE)
+                
+            request_permissions(permissions_to_request)
         except Exception as e:
             print(f"Permission Error: {e}")
 
@@ -60,7 +71,8 @@ class SInput(TextInput):
         self.font_name = DF
         self.multiline = kw.get('multiline', False)
         self.size_hint_y = None
-        self.height = 110 
+        # [수정] 입력창 높이를 110에서 60으로 하향 조정 (1번 사진 문제 해결)
+        self.height = 60 
 
 class SBtn(Button):
     def __init__(self, **kw):
@@ -69,13 +81,13 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 화면 클래스 ---
+# --- 화면 클래스들 ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
         super().__init__(**kw)
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
-        self.layout.add_widget(Label(text="[PT1 통합 검색]", font_size='22sp', size_hint_y=0.1, font_name=DF))
+        self.layout.add_widget(Label(text="[PT1 통합 검색]", font_size='2sp', size_hint_y=0.1, font_name=DF))
         
         s_box = BoxLayout(size_hint_y=None, height=120, spacing=5)
         self.stti = SInput(hint_text="계정/캐릭터 검색...")
@@ -181,8 +193,18 @@ class Detail(Screen):
 
     def get_pic(self, *a):
         from kivy.uix.filechooser import FileChooserIconView
-        p_path = '/sdcard' if platform == 'android' else '.'
-        fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png', '*.jpeg']); btn = Button(text="결정", size_hint_y=0.2, font_name=DF)
+        # 안드로이드의 경우 사진 기본 경로 설정
+        if platform == 'android':
+            from android.storage import app_storage_path
+            from android import storage
+            # 외부 저장소 경로 가져오기 (API 버전에 맞춰 조정됨)
+            p_path = storage.get_external_storage_path()
+            if not p_path: p_path = '/sdcard/DCIM/Camera' # 대체 경로
+        else:
+            p_path = '.'
+            
+        # [수정] FileChooser가 실제 이미지 파일만 찾도록 필터 강화 (2, 3번 사진 문제 해결)
+        fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG', '*.JPEG']); btn = Button(text="결정", size_hint_y=0.2, font_name=DF)
         content = BoxLayout(orientation='vertical'); content.add_widget(fc); content.add_widget(btn); pop = Popup(title="사진 선택", content=content, size_hint=(0.9, 0.9))
         def sel(x):
             if fc.selection: self.img.source = fc.selection[0]; pop.dismiss()
@@ -203,6 +225,7 @@ class Inventory(Screen):
         l.add_widget(Label(text=f"[{char_data.get('이름', '캐릭')}] 인벤토리", font_name=DF, size_hint_y=0.1))
         
         sc_inv = ScrollView(do_scroll_x=False, do_scroll_y=True)
+        # 인벤토리 입력창은 multiline이므로 높이 조절 안 함 (필요시 조절)
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
         self.ti.height = 1600 
@@ -221,7 +244,7 @@ class Inventory(Screen):
 
 class PristonApp(App):
     def build(self):
-        request_android_permissions() # 앱 시작 시 권한 요청
+        request_android_permissions() # 앱 시작 시 최신 권한 요청
         sm = ScreenManager(transition=FadeTransition())
         sm.cur_acc = ""; sm.cur_idx = ""
         sm.add_widget(MainMenu(name='main')); sm.add_widget(CharSelect(name='char_select'))
