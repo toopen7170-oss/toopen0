@@ -13,14 +13,13 @@ package.domain = org.test
 source.dir = .
 
 # (list) Source files to include 
-# 핵심: ttf(폰트)와 json(데이터)이 반드시 포함되어야 합니다.
+# ttf와 json이 누락되지 않도록 확실히 포함했습니다.
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
 
 # (list) Application requirements
 requirements = python3,kivy,pillow
 
 # (str) Custom source folders for assets
-# 현재 폴더에 있는 모든 ttf 파일을 포함하도록 명시합니다.
 source.include_patterns = assets/*,*.ttf
 
 # (str) Application version
@@ -36,11 +35,13 @@ fullscreen = 0
 # Android specific
 # -----------------------------------------------------------------------------
 
-# (list) Permissions (인터넷 및 저장소 권한)
-android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE
+# (list) Permissions 
+# 사진 기능을 위한 핵심 권한(CAMERA, STORAGE)을 모두 추가했습니다.
+android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, CAMERA
 
-# (int) Android API to use
-android.api = 31
+# (int) Android API to use 
+# 최신 기기 대응을 위해 API 33으로 상향 조정했습니다.
+android.api = 33
 
 # (int) Minimum API your APK will support.
 android.minapi = 21
@@ -62,7 +63,7 @@ android.archs = arm64-v8a, armeabi-v7a
 
 [buildozer]
 
-# (int) Log level (2 = 디버그 모드로 모든 오류 출력)
+# (int) Log level (2 = 오류 추적을 위한 디버그 모드)
 log_level = 2
 
 # (int) Display warning if buildozer is run as root
