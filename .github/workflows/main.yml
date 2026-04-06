@@ -15,6 +15,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 1. 빌드 전 깨끗하게 청소
       - name: Clean previous build
         run: |
           rm -rf .buildozer/
@@ -31,29 +32,41 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      # 2. 필수 시스템 패키지 설치
       - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
-            build-essential python3-dev ant openjdk-17-jdk
+            build-essential python3-dev ant openjdk-17-jdk wget
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-      # [핵심 추가] sdkmanager 관련 오류 방지를 위한 SDK 도구 수동 설치
-      - name: Setup Android SDK Tools
+      # 3. [핵심] sdkmanager 경로 문제 수동 해결
+      # Buildozer가 찾는 구형 경로(tools/bin) 구조를 강제로 만들어줍니다.
+      - name: Setup Android SDK Tools (Manual Fix)
         run: |
           mkdir -p ~/.android && touch ~/.android/repositories.cfg
+          # 최신 커맨드라인 툴 다운로드
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools-linux-9477386_latest.zip -d cmdline-tools
+          unzip commandlinetools-linux-9477386_latest.zip
+          
+          # Buildozer가 기대하는 경로 구조 생성
+          # 구형 방식인 tools/bin/sdkmanager 위치를 흉내냅니다.
+          mkdir -p $HOME/.buildozer/android/platform/android-sdk/tools/bin
+          cp -r cmdline-tools/bin/* $HOME/.buildozer/android/platform/android-sdk/tools/bin/
+          
+          # 신형 방식(cmdline-tools/latest)도 함께 대비
           mkdir -p $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest
-          mv cmdline-tools/cmdline-tools/* $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
+          cp -r cmdline-tools/* $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/ || true
 
+      # 4. 빌드 실행
       - name: Build with Buildozer
         run: |
+          # 라이선스 자동 동의 및 빌드
           yes | buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
@@ -64,5 +77,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-App-Success
+          name: PristonTale-App-Final
           path: bin/*.apk
