@@ -1,4 +1,18 @@
 import os, sys
+
+# --- [1단계] 앱 시작 즉시 폰트 강제 설정 (가장 중요) ---
+from kivy.config import Config
+FONT_NAME = "font.ttf"
+if os.path.exists(FONT_NAME):
+    # 시스템 전체 기본 폰트를 font.ttf로 고정 (팝업창 깨짐 방지)
+    Config.set('kivy', 'default_font', [
+        'KFont', 
+        FONT_NAME, 
+        FONT_NAME, 
+        FONT_NAME, 
+        FONT_NAME
+    ])
+
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -11,58 +25,35 @@ from kivy.uix.image import Image
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.popup import Popup
 from kivy.core.text import LabelBase
-from kivy.config import Config
 from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- [초강력 폰트 로드 로직] ---
-# 1. 폰트 파일명 설정 (사용자가 바꾼 font.ttf)
-FONT_NAME = "font.ttf"
-
-# 2. 실행 환경에 따른 실제 경로 추출 (이게 핵심입니다)
-if getattr(sys, 'frozen', False):
-    # 빌드된 환경 (PyInstaller / Android 등)
-    BASE_PATH = os.path.dirname(sys.executable)
-else:
-    # 일반 파이썬 실행 환경
-    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-
-FONT_PATH = os.path.join(BASE_PATH, FONT_NAME)
-
-# 3. 폰트 등록 시도
+# 폰트 등록
 DF = None
-if os.path.exists(FONT_PATH):
-    try:
-        LabelBase.register(name="KFont", fn_regular=FONT_PATH)
-        # 4. Kivy 기본 폰트 강제 고정
-        Config.set('kivy', 'default_font', ['KFont', FONT_PATH, FONT_PATH, FONT_PATH, FONT_PATH])
-        Config.write() # 설정을 파일에 즉시 기록
-        DF = "KFont"
-        print(f"Success: Font loaded from {FONT_PATH}")
-    except Exception as e:
-        print(f"Error registering font: {e}")
-else:
-    # 만약 위 경로에 없다면 현재 폴더에서 한 번 더 찾기
-    if os.path.exists(FONT_NAME):
-        LabelBase.register(name="KFont", fn_regular=FONT_NAME)
-        DF = "KFont"
-        print("Success: Font loaded from current directory")
+if os.path.exists(FONT_NAME):
+    LabelBase.register(name="KFont", fn_regular=FONT_NAME)
+    DF = "KFont"
 
-# 키보드 대응 모드 설정
+# 키보드 대응
 Window.softinput_mode = "below_target"
-
-# 데이터 저장소
 store = JsonStore('priston_v1_1.json')
 
-# --- 안드로이드 사진 권한 ---
-if platform == 'android':
-    try:
-        from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE, Permission.MANAGE_EXTERNAL_STORAGE])
-    except Exception as e: print(f"Permission: {e}")
+# --- [2단계] 안드로이드 사진 권한 (최신 버전 대응) ---
+def request_android_permissions():
+    if platform == 'android':
+        try:
+            from android.permissions import request_permissions, Permission
+            # Android 13 이상과 이하를 모두 커버하는 권한 요청
+            request_permissions([
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+                Permission.CAMERA
+            ])
+        except Exception as e:
+            print(f"Permission Error: {e}")
 
-# --- 공통 위젯 (폰트 기본값 DF 적용) ---
+# --- 공통 위젯 ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -78,11 +69,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 화면 클래스들 (코드 동일하므로 생략하지 않고 전체 통합) ---
-# [MainMenu, CharSelect, Detail, Inventory 클래스는 이전과 동일하므로 DF 변수를 그대로 사용합니다]
-# (지면상 생략하지만, 위젯 생성 시 font_name=DF가 들어간 부분들이 잘 작동할 것입니다.)
-
-# --- 기존 화면 클래스들 유지 ---
+# --- 화면 클래스 ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -234,6 +221,7 @@ class Inventory(Screen):
 
 class PristonApp(App):
     def build(self):
+        request_android_permissions() # 앱 시작 시 권한 요청
         sm = ScreenManager(transition=FadeTransition())
         sm.cur_acc = ""; sm.cur_idx = ""
         sm.add_widget(MainMenu(name='main')); sm.add_widget(CharSelect(name='char_select'))
