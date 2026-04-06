@@ -1,5 +1,4 @@
-import os
-import json
+import os, sys
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -17,37 +16,33 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- [1단계] 한글 폰트 및 시스템 강제 설정 ---
-# 폰트 파일명을 font.ttf로 고정합니다.
+# --- 폰트 및 시스템 설정 (기존 유지) ---
 FONT_FILE = "font.ttf"
-
-# 시스템 기본 폰트를 KFont로 강제 지정 (한글 깨짐 방지 핵심)
-Config.set('kivy', 'default_font', ['KFont', FONT_FILE, FONT_FILE, FONT_FILE, FONT_FILE])
-
 if os.path.exists(FONT_FILE):
-    # 모든 글꼴 스타일에 대해 점주님의 font.ttf를 등록
-    LabelBase.register(
-        name="KFont", 
-        fn_regular=FONT_FILE,
-        fn_bold=FONT_FILE,
-        fn_italic=FONT_FILE,
-        fn_bolditalic=FONT_FILE
-    )
+    LabelBase.register(name="KFont", fn_regular=FONT_FILE)
+    Config.set('kivy', 'default_font', ['KFont', FONT_FILE, FONT_FILE, FONT_FILE])
     DF = "KFont"
-else:
-    DF = None  # 폰트 파일이 없을 경우 대비
+else: DF = None
 
-# 안드로이드 키보드가 입력창을 가리지 않게 설정
+# 키보드 대응 모드 설정
 Window.softinput_mode = "below_target"
 
 # 데이터 저장소
 store = JsonStore('priston_v1_1.json')
 
-# --- [2단계] 공통 커스텀 위젯 ---
+# --- 안드로이드 사진 권한 ---
+if platform == 'android':
+    try:
+        from android.permissions import request_permissions, Permission
+        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
+    except Exception as e: print(f"Permission: {e}")
+
+# --- 공통 위젯 ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.font_name = DF
+        self.multiline = kw.get('multiline', False)
         self.size_hint_y = None
         self.height = 110 
 
@@ -58,7 +53,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- [3단계] 화면 구성 ---
+# --- 화면 클래스들 ( mainMenu, charSelect, Detail은 기존과 동일 ) ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -183,6 +178,7 @@ class Detail(Screen):
         new_c = {f: ti.text for f, ti in self.ins.items()}; new_c['img'] = self.img.source; new_c['inventory'] = self.char_data.get('inventory', '')
         d['chars'][idx] = new_c; store.put(acc, **d); self.manager.current = 'char_select'
 
+# --- 🎯 [집중 수리 완료] 인벤토리 화면 ---
 class Inventory(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -191,17 +187,19 @@ class Inventory(Screen):
         l = BoxLayout(orientation='vertical', padding=15, spacing=10)
         l.add_widget(Label(text=f"[{char_data.get('이름', '캐릭')}] 인벤토리", font_name=DF, size_hint_y=0.1))
         
+        # 1. 인벤토리 전용 스크롤뷰 (핵심 수정)
         sc_inv = ScrollView(do_scroll_x=False, do_scroll_y=True)
-        # 멀티라인 입력 설정
-        self.ti = TextInput(text=char_data.get('inventory', ''), multiline=True, font_name=DF)
+        # 2. 여러 줄 입력창 (글이 안 보이지 않게 충분한 높이 확보)
+        self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
-        self.ti.height = 1600 # 입력창을 길게 설정하여 스크롤 확보
-        
-        # 🎯 포커스 시 키보드 위로 견인
+        self.ti.height = 1600 # 아주 길게 잡아서 스크롤이 자연스럽게 작동하게 함
+
+        # 🎯 핵심 로직: 칸에 포커스가 잡히면 스크롤을 입력 위치로 강제 견인 (padding=120)
         self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc_inv.scroll_to(inst, padding=120), 0.1) if val else None)
         
         sc_inv.add_widget(self.ti); l.add_widget(sc_inv)
         
+        # 하단 버튼바
         btns = BoxLayout(size_hint_y=None, height=130, spacing=10)
         sv = Button(text="저장", font_name=DF, background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
         bk = Button(text="닫기", font_name=DF, background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
@@ -211,7 +209,7 @@ class Inventory(Screen):
         d = store.get(acc); d['chars'][idx]['inventory'] = self.ti.text
         store.put(acc, **d); self.manager.current = 'detail'
 
-# --- [4단계] 앱 구동 ---
+# --- 앱 구동 ---
 class PristonApp(App):
     def build(self):
         sm = ScreenManager(transition=FadeTransition())
