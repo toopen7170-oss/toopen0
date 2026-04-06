@@ -12,12 +12,11 @@ package.domain = org.test
 # (str) Source code where the main.py live
 source.dir = .
 
-# (list) Source files to include
-# [수정] 폰트(ttf)와 데이터(json) 파일이 누락되지 않도록 포함 설정
+# (list) Source files to include (ttf, json 누락 방지)
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
 
 # (list) Application requirements
-# [수정] 안드로이드 시스템 기능을 제어하기 위해 android와 pyjnius를 추가했습니다.
+# [필수] android와 pyjnius가 있어야 갤러리 호출 및 권한 설정이 가능합니다.
 requirements = python3,kivy,pillow,android,pyjnius
 
 # (str) Custom source folders for assets
@@ -37,18 +36,20 @@ fullscreen = 0
 # -----------------------------------------------------------------------------
 
 # (list) Permissions 
-# [수정] 카메라 및 안드로이드 13 대응 최신 미디어 접근 권한 추가
+# 최신 안드로이드(API 33) 대응 권한을 모두 포함했습니다.
 android.permissions = INTERNET, CAMERA, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES
 
 # (int) Android API to use 
-# [수정] 최신 기기 호환성을 위해 API 33으로 설정
 android.api = 33
 
 # (int) Minimum API your APK will support.
 android.minapi = 21
 
-# (str) Android NDK version to use
+# [에러 해결 포인트] 
+# 특정 NDK 버전을 강제하거나 경로를 지정하면 GitHub 서버 환경과 충돌합니다.
+# 버전을 비워두거나 시스템 기본값(25b)을 쓰되, 경로는 비워두어 자동 탐색하게 합니다.
 android.ndk = 25b
+android.ndk_path = 
 
 # (bool) Use --private data storage (Internal storage)
 android.private_storage = True
@@ -64,7 +65,7 @@ android.archs = arm64-v8a, armeabi-v7a
 
 [buildozer]
 
-# (int) Log level (2 = 오류 발생 시 상세 로그 확인 가능)
+# (int) Log level (상세한 에러 확인을 위해 2로 설정)
 log_level = 2
 
 # (int) Display warning if buildozer is run as root
