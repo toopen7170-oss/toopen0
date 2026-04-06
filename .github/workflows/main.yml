@@ -33,14 +33,11 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-      # [핵심] sdkmanager 경로 강제 연결 (심볼릭 링크)
+      # sdkmanager 경로 문제 해결을 위한 심볼릭 링크
       - name: Fix SDK Manager Path
         run: |
-          # Buildozer가 찾는 위치를 미리 만듭니다.
           mkdir -p /usr/local/lib/android/sdk/tools/bin
-          # 실제 sdkmanager가 있는 위치를 Buildozer가 찾는 위치로 연결합니다.
           sudo ln -sf /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager /usr/local/lib/android/sdk/tools/bin/sdkmanager
-          # 권한 부여
           sudo chmod +x /usr/local/lib/android/sdk/tools/bin/sdkmanager
 
       - name: Build with Buildozer
