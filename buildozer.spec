@@ -43,9 +43,12 @@ android.api = 33
 # (int) Minimum API your APK will support.
 android.minapi = 21
 
-# [중요] NDK 설정 - GitHub Actions 최신 환경에 맞춤
+# [핵심 수정] 
+# GitHub 서버에 이미 설치된 NDK를 사용하도록 설정을 강제합니다.
+# 경로를 직접 지정하지 않고 시스템 변수를 참조하게 유도합니다.
 android.ndk = 25b
-android.ndk_path = 
+android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
+android.sdk_path = /usr/local/lib/android/sdk
 
 # (bool) Use --private data storage (Internal storage)
 android.private_storage = True
