@@ -13,7 +13,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 무료 빌드 환경을 깨끗하게 정리 (캐시 찌꺼기 제거)
       - name: Clean build environment
         run: |
           rm -rf .buildozer/
@@ -30,7 +29,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Install dependencies
+      - name: Install system dependencies
         run: |
           sudo apt update
           sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
@@ -39,35 +38,28 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-      # [무료 해결책] sdkmanager를 직접 다운로드하여 Buildozer가 찾는 위치에 강제 배치
-      - name: Setup Android SDK Tools
+      # [무료 해결 포인트] 시스템에 깔린 SDK를 활용하도록 경로를 미리 생성하고 권한 부여
+      - name: Pre-setup Android SDK
         run: |
           mkdir -p ~/.android && touch ~/.android/repositories.cfg
-          # 구글 공식 무료 도구 다운로드
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-          unzip commandlinetools-linux-9477386_latest.zip
-          
-          # Buildozer의 구형 경로 엔진이 인식하도록 폴더 구조 생성
-          # 이 과정이 없으면 sdkmanager를 못 찾아서 에러가 납니다.
-          mkdir -p $HOME/.buildozer/android/platform/android-sdk/tools/bin
-          cp -r cmdline-tools/bin/* $HOME/.buildozer/android/platform/android-sdk/tools/bin/
-          
-          # 신형 구조도 함께 복사 (보험용)
-          mkdir -p $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest
-          cp -r cmdline-tools/* $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/ || true
+          # Buildozer가 스스로 SDK를 구성할 수 있도록 최소한의 경로만 보장
+          mkdir -p $HOME/.buildozer/android/platform
 
       - name: Build with Buildozer
         run: |
-          # 모든 라이선스 동의를 자동으로 처리하여 무료 빌드 중단 방지
-          yes | buildozer android debug
+          # Broken pipe 에러를 방지하기 위해 buildozer의 자동 수락 기능을 활용
+          buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
+          # GitHub 서버의 표준 경로를 명시적으로 알려줌
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+          ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/27.3.13750724
           USER: root
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-App-Free-Build
+          name: PristonTale-App-Success
           path: bin/*.apk
