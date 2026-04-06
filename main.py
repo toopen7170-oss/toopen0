@@ -16,13 +16,27 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- 폰트 및 시스템 설정 (기존 유지) ---
-FONT_FILE = "font.ttf"
+# --- [최종 수정] 폰트 설정 (font.ttf 기준) ---
+# 1. 파일명을 font.ttf로 고정했으므로 경로를 단순화합니다.
+FONT_FILE = "font.ttf" 
+
 if os.path.exists(FONT_FILE):
+    # 폰트 엔진에 'KFont'라는 이름으로 등록
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
-    Config.set('kivy', 'default_font', ['KFont', FONT_FILE, FONT_FILE, FONT_FILE])
+    
+    # 앱 전체의 기본 폰트를 KFont로 강제 지정 (모든 위젯에 자동 적용)
+    Config.set('kivy', 'default_font', [
+        'KFont', 
+        FONT_FILE, # Regular
+        FONT_FILE, # Italic (없으므로 Regular로 대체)
+        FONT_FILE, # Bold (없으므로 Regular로 대체)
+        FONT_FILE  # BoldItalic (없으므로 Regular로 대체)
+    ])
     DF = "KFont"
-else: DF = None
+else:
+    # 폰트 파일이 없을 경우 터미널에 경고 출력
+    print(f"!!! 경고: {FONT_FILE} 파일을 찾을 수 없습니다 !!!")
+    DF = None
 
 # 키보드 대응 모드 설정
 Window.softinput_mode = "below_target"
@@ -37,7 +51,7 @@ if platform == 'android':
         request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
     except Exception as e: print(f"Permission: {e}")
 
-# --- 공통 위젯 ---
+# --- 공통 위젯 (폰트 기본값 DF 적용) ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -53,7 +67,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- 화면 클래스들 ( mainMenu, charSelect, Detail은 기존과 동일 ) ---
+# --- 화면 클래스들 (MainMenu, CharSelect, Detail) ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -178,7 +192,6 @@ class Detail(Screen):
         new_c = {f: ti.text for f, ti in self.ins.items()}; new_c['img'] = self.img.source; new_c['inventory'] = self.char_data.get('inventory', '')
         d['chars'][idx] = new_c; store.put(acc, **d); self.manager.current = 'char_select'
 
-# --- 🎯 [집중 수리 완료] 인벤토리 화면 ---
 class Inventory(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -187,19 +200,15 @@ class Inventory(Screen):
         l = BoxLayout(orientation='vertical', padding=15, spacing=10)
         l.add_widget(Label(text=f"[{char_data.get('이름', '캐릭')}] 인벤토리", font_name=DF, size_hint_y=0.1))
         
-        # 1. 인벤토리 전용 스크롤뷰 (핵심 수정)
         sc_inv = ScrollView(do_scroll_x=False, do_scroll_y=True)
-        # 2. 여러 줄 입력창 (글이 안 보이지 않게 충분한 높이 확보)
         self.ti = SInput(text=char_data.get('inventory', ''), multiline=True)
         self.ti.size_hint_y = None
-        self.ti.height = 1600 # 아주 길게 잡아서 스크롤이 자연스럽게 작동하게 함
+        self.ti.height = 1600 
 
-        # 🎯 핵심 로직: 칸에 포커스가 잡히면 스크롤을 입력 위치로 강제 견인 (padding=120)
         self.ti.bind(focus=lambda inst, val: Clock.schedule_once(lambda dt: sc_inv.scroll_to(inst, padding=120), 0.1) if val else None)
         
         sc_inv.add_widget(self.ti); l.add_widget(sc_inv)
         
-        # 하단 버튼바
         btns = BoxLayout(size_hint_y=None, height=130, spacing=10)
         sv = Button(text="저장", font_name=DF, background_color=(0.1, 0.6, 0.2, 1)); sv.bind(on_release=self.save)
         bk = Button(text="닫기", font_name=DF, background_color=(0.4, 0.4, 0.4, 1)); bk.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
