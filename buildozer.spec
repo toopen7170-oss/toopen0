@@ -43,12 +43,11 @@ android.api = 33
 # (int) Minimum API your APK will support.
 android.minapi = 21
 
-# [핵심 수정] 
-# GitHub 서버에 이미 설치된 NDK를 사용하도록 설정을 강제합니다.
-# 경로를 직접 지정하지 않고 시스템 변수를 참조하게 유도합니다.
-android.ndk = 25b
-android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
+# [중요] GitHub 서버의 실제 SDK/NDK 경로를 강제로 지정합니다.
+# 이 경로 설정이 없으면 sdkmanager를 엉뚱한 곳에서 찾다가 실패합니다.
 android.sdk_path = /usr/local/lib/android/sdk
+android.ndk_path = /usr/local/lib/android/sdk/ndk/27.3.13750724
+android.ndk = 25b
 
 # (bool) Use --private data storage (Internal storage)
 android.private_storage = True
@@ -61,6 +60,12 @@ android.enable_androidx = True
 
 # (str) The Android arch to build for.
 android.archs = arm64-v8a, armeabi-v7a
+
+# (bool) Skip SDK/NDK update (이미 서버에 설치된 것을 쓰므로 업데이트를 건너뜁니다)
+android.skip_update = True
+
+# (bool) Accept SDK license
+android.accept_sdk_license = True
 
 [buildozer]
 
