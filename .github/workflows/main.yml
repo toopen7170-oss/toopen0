@@ -33,18 +33,23 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
+      # [핵심] sdkmanager 경로 강제 연결 (심볼릭 링크)
+      - name: Fix SDK Manager Path
+        run: |
+          # Buildozer가 찾는 위치를 미리 만듭니다.
+          mkdir -p /usr/local/lib/android/sdk/tools/bin
+          # 실제 sdkmanager가 있는 위치를 Buildozer가 찾는 위치로 연결합니다.
+          sudo ln -sf /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager /usr/local/lib/android/sdk/tools/bin/sdkmanager
+          # 권한 부여
+          sudo chmod +x /usr/local/lib/android/sdk/tools/bin/sdkmanager
+
       - name: Build with Buildozer
         run: |
-          # 라이선스 자동 동의 및 빌드 실행
-          # yes | 를 사용하지 않고 환경 변수로 라이선스를 통과시킵니다.
           buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
-          # [핵심] GitHub Actions 기본 SDK 경로를 직접 지정 (로그 기반 확인 경로)
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
           ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/27.3.13750724
           USER: root
-          # sdkmanager 경로 충돌 방지
-          PATH: /usr/local/lib/android/sdk/cmdline-tools/latest/bin:/usr/local/lib/android/sdk/platform-tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
