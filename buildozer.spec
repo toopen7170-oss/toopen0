@@ -1,26 +1,42 @@
 [app]
+
+# (기본 정보)
 title = PT1 Chart App
 package.name = pt1chart
 package.domain = org.toopen
+
+# (소스 및 폰트 포함 설정)
 source.dir = .
-# [중요] ttf 확장자가 반드시 포함되어야 합니다!
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
+# font.ttf가 포함되도록 ttf 확장자가 들어있어야 합니다.
+
 version = 1.2
 
+# (필요 라이브러리)
 requirements = python3,kivy==2.3.0,pillow,android,pyjnius
 
-android.archs = arm64-v8a, armeabi-v7a
+# [핵심 수정] 화면 방향을 세로로 고정합니다.
+orientation = portrait
+
+# (안드로이드 설정)
+osx.python_version = 3
+osx.kivy_version = 1.9.1
+
+fullscreen = 0
+
+# [핵심 수정] 안드로이드 권한 (인터넷 및 사진첩 접근)
+android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE
+
 android.api = 34
 android.minapi = 21
 android.sdk = 34
 android.ndk = 25b
+android.archs = arm64-v8a, armeabi-v7a
 
-# 폰트 파일이 루트에 있으므로 경로 비워둠
-android.sdk_path = 
-android.ndk_path = 
-
+# (빌드 설정)
 android.accept_sdk_license = True
-android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+android.skip_update = False
+android.setup_py = False
 
 [buildozer]
 log_level = 2
