@@ -31,15 +31,20 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
             build-essential python3-dev ant openjdk-17-jdk
           pip install --upgrade pip
-          # Cython 버전을 3.0 미만으로 유지하는 것이 중요합니다.
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
       - name: Build with Buildozer
         run: |
-          # [수정] clean 명령어를 제거했습니다.
           buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
           USER: root
+
+      # [추가] 빌드된 APK 파일을 GitHub 결과물로 업로드합니다.
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PT1-Chart-App-APK
+          path: bin/*.apk
