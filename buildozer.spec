@@ -1,12 +1,12 @@
 [app]
 title = Priston Tale Chart
-package.name = pristontale_chart_v7
+package.name = pristontale_chart_v9
 package.domain = org.toopen
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 2.2
+version = 2.5
 
-# plyer 라이브러리 필수
+# 필수 라이브러리 (plyer는 사진 선택에 필수입니다)
 requirements = python3,kivy==2.3.0,pillow,android,pyjnius,plyer
 
 orientation = portrait
