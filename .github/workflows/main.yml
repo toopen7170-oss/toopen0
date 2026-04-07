@@ -31,12 +31,12 @@ jobs:
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
             build-essential python3-dev ant openjdk-17-jdk
           pip install --upgrade pip
+          # Cython 버전을 3.0 미만으로 유지하는 것이 중요합니다.
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
       - name: Build with Buildozer
         run: |
-          # 기존에 꼬인 빌드 캐시를 삭제하고 새로 시작합니다.
-          buildozer android clean
+          # [수정] clean 명령어를 제거했습니다.
           buildozer android debug
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
