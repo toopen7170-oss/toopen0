@@ -1,17 +1,15 @@
 [app]
-title = PT1 Chart App
-package.name = pt1chart
+title = Priston Tale Chart
+package.name = pristontale_chart_v7
 package.domain = org.toopen
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 1.8
+version = 2.2
 
-# [중요] plyer 라이브러리 필수 포함
+# plyer 라이브러리 필수
 requirements = python3,kivy==2.3.0,pillow,android,pyjnius,plyer
 
 orientation = portrait
-
-# [중요] 안드로이드 권한 보강
 android.permissions = INTERNET, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, CAMERA, MANAGE_EXTERNAL_STORAGE
 
 android.api = 33
