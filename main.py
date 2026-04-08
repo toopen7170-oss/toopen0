@@ -16,13 +16,15 @@ from kivy.metrics import dp
 from kivy.clock import Clock
 from plyer import filechooser
 
-# [폰트 설정]
+# [폰트 설정] 4번 오류 해결을 위해 예외 처리 강화
 FONT_PATH = 'font.ttf'
+K_FONT = 'Roboto' # 기본값 설정
 if os.path.exists(FONT_PATH):
-    LabelBase.register(name="KFont", fn_regular=FONT_PATH)
-    K_FONT = "KFont"
-else:
-    K_FONT = 'Roboto'
+    try:
+        LabelBase.register(name="KFont", fn_regular=FONT_PATH)
+        K_FONT = "KFont"
+    except Exception as e:
+        print(f"Font Error: {e}")
 
 # 데이터 파일
 store = JsonStore('pt1_final_v15.json')
@@ -34,8 +36,9 @@ class KTextInput(TextInput):
         self.font_name = K_FONT
         self.multiline = False
         self.font_size = '16sp'
-        # [글씨 내리기 해결] 패딩을 조절하여 글자를 수직 중앙으로 배치
-        self.padding = [dp(10), dp(12), dp(10), dp(12)] 
+        # [해결] 상단 패딩(20)을 대폭 늘려 글씨를 아래로 확실히 내림
+        # 순서: [왼쪽, 위, 오른쪽, 아래]
+        self.padding = [dp(10), dp(20), dp(10), dp(5)] 
 
 class SBtn(Button):
     def __init__(self, bg=(0.2, 0.2, 0.2, 1), **kwargs):
@@ -134,7 +137,7 @@ class Slots(Screen):
 
     def go_detail(self, idx): self.manager.cur_idx = idx; self.manager.current = 'detail'
 
-# --- 3. 캐릭터 상세 (자동 스크롤 및 글자 정렬 적용) ---
+# --- 3. 캐릭터 상세 ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets()
@@ -144,8 +147,8 @@ class Detail(Screen):
 
         root = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
         self.scroll = ScrollView(do_scroll_x=False)
-        # 하단 여백을 충분히 주어 마지막 입력창도 위로 올라올 수 있게 함
-        self.content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, padding=[0, 0, 0, dp(400)])
+        # 하단 여백 충분히 확보
+        self.content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, padding=[0, 0, 0, dp(550)])
         self.content.bind(minimum_height=self.content.setter('height'))
         
         self.img_grid = GridLayout(cols=2, spacing=dp(5), size_hint_y=None)
@@ -163,9 +166,9 @@ class Detail(Screen):
         for f in self.fields:
             row = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
             row.add_widget(Label(text=f, font_name=K_FONT, size_hint_x=0.3))
-            # [수정] 커스텀 입력창 적용 (글자 내림)
             ti = KTextInput(text=str(self.data.get(f, '')))
-            ti.bind(on_focus=self.auto_scroll)
+            # [해결] 터치 시 화면 최상단으로 강제 스크롤되도록 수정
+            ti.bind(on_focus=self.auto_scroll_to_top)
             row.add_widget(ti); self.inputs[f] = ti
             self.content.add_widget(row)
             
@@ -176,11 +179,11 @@ class Detail(Screen):
         root.add_widget(nav)
         self.add_widget(root)
 
-    # [자동 스크롤 해결] 로직 보강
-    def auto_scroll(self, instance, value):
+    # [수정] 터치한 칸이 무조건 화면 맨 위로 가도록 로직 변경
+    def auto_scroll_to_top(self, instance, value):
         if value:
-            # 키보드가 올라오는 시간을 고려하여 0.3초 뒤에 스크롤 이동
-            Clock.schedule_once(lambda dt: self.scroll.scroll_to(instance, padding=dp(20)), 0.3)
+            # 0.3초 뒤에 해당 입력창이 스크롤 뷰의 맨 위(Top)에 오도록 설정
+            Clock.schedule_once(lambda dt: self.scroll.scroll_to(instance, padding=dp(10)), 0.3)
 
     def refresh_photos(self):
         self.img_grid.clear_widgets()
@@ -216,7 +219,7 @@ class Inventory(Screen):
         self.items = store.get(acc)['slots'][idx].get('inven', [])
         root = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
         self.scroll = ScrollView()
-        self.list_box = GridLayout(cols=1, spacing=dp(5), size_hint_y=None, padding=[0, 0, 0, dp(400)])
+        self.list_box = GridLayout(cols=1, spacing=dp(5), size_hint_y=None, padding=[0, 0, 0, dp(550)])
         self.list_box.bind(minimum_height=self.list_box.setter('height'))
         self.draw_items()
         self.scroll.add_widget(self.list_box); root.add_widget(self.scroll)
@@ -233,6 +236,7 @@ class Inventory(Screen):
             row = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
             ti = KTextInput(text=val)
             ti.bind(text=lambda instance, v, idx=i: self.update_val(idx, v))
+            # 인벤토리에서도 자동 스크롤 적용
             ti.bind(on_focus=lambda instance, v: Clock.schedule_once(lambda dt: self.scroll.scroll_to(instance), 0.3) if v else None)
             del_b = Button(text="삭제", size_hint_x=None, width=dp(60), background_color=(0.7, 0.2, 0.2, 1))
             del_b.bind(on_release=lambda x, idx=i: show_confirm("삭제", "이 항목을 삭제할까요?", lambda: self.rem_i(idx)))
