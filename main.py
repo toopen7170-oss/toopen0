@@ -1,4 +1,6 @@
-import os  # <-- Import를 import로 수정
+import os
+import sys
+import traceback
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -9,7 +11,7 @@ from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
 from kivy.uix.image import Image
 from kivy.storage.jsonstore import JsonStore
-from kivy.uix.popup import Popup  # <-- 팝업 클래스 누락 방지 추가
+from kivy.uix.popup import Popup
 from kivy.core.text import LabelBase
 from kivy.config import Config
 from kivy.utils import platform
@@ -18,8 +20,21 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
 
-# --- [1. 폰트 설정] ---
-# 깃허브 저장소의 파일명과 반드시 일치해야 합니다 (font.ttf)
+# --- [0. 에러 로그 저장 시스템] ---
+# 앱이 튕기면 핸드폰 내부에 error_log.txt를 생성합니다.
+def logger(type, value, tb):
+    log_path = "error_log.txt"
+    if platform == 'android':
+        from android.storage import app_storage_path
+        log_path = os.path.join(app_storage_path(), "error_log.txt")
+    
+    with open(log_path, "w", encoding='utf-8') as f:
+        f.write("--- PT1 Manager Error Log ---\n")
+        f.write("".join(traceback.format_exception(type, value, tb)))
+
+sys.excepthook = logger
+
+# --- [1. 폰트 및 시스템 설정] ---
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
     try:
@@ -29,15 +44,14 @@ if os.path.exists(FONT_FILE):
 else:
     DF = None
 
-# 키보드 설정
 Window.softinput_mode = "below_target"
-store = JsonStore('priston_v1_3.json') # 버전 업그레이드
+store = JsonStore('priston_v2_7.json') # 새 버전으로 시작
 
+# --- [2. 배경 레이아웃 클래스] ---
 class BgLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            # 배경 이미지 파일명 체크 (bg.png)
             if os.path.exists('bg.png'):
                 self.bg_rect = Rectangle(source='bg.png', pos=self.pos, size=self.size)
             else:
@@ -49,6 +63,7 @@ class BgLayout(BoxLayout):
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
 
+# --- [3. 공통 위젯 스타일] ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -65,6 +80,7 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = dp(60)
 
+# --- [4. 화면 클래스들] ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
@@ -102,12 +118,10 @@ class MainMenu(Screen):
                 row.add_widget(acc_btn); row.add_widget(del_btn); self.grid.add_widget(row)
 
     def add_pop(self, *a):
-        # 팝업 내에서 폰트가 안 나오면 튕길 수 있으므로 안전하게 구성
         c = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
         inp = SInput(hint_text="ID 입력")
         btn = SBtn(text="생성", background_color=(0.1, 0.7, 0.3, 1))
         c.add_widget(inp); c.add_widget(btn)
-        # title_font를 직접 지정하여 안전성 확보
         pop = Popup(title="계정 추가", content=c, size_hint=(0.8, 0.4), title_font=DF if DF else None)
         def save(x):
             if inp.text.strip():
@@ -117,9 +131,6 @@ class MainMenu(Screen):
 
     def go(self, n):
         self.manager.cur_acc = n; self.manager.current = 'char_select'
-
-# --- 나머지 클래스(CharSelect, Detail, Inventory)는 동일하므로 생략 가능하나 
-# 앱 실행을 위해 PristonApp 클래스까지 포함하여 빌드하세요. ---
 
 class CharSelect(Screen):
     def on_enter(self):
