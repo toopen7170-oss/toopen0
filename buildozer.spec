@@ -4,7 +4,7 @@ package.name = pristontale
 package.domain = org.pt1
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 2.2
+version = 2.3
 
 requirements = python3,kivy==2.3.0,plyer,android,setuptools
 
