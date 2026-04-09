@@ -18,40 +18,34 @@ from plyer import filechooser
 
 # [폰트 설정]
 FONT_PATH = 'font.ttf'
-K_FONT = 'Roboto' # 기본값
+K_FONT = 'Roboto'
 if os.path.exists(FONT_PATH):
     try:
         LabelBase.register(name="KFont", fn_regular=FONT_PATH)
         K_FONT = "KFont"
-    except: pass # 폰트 오류 시 Roboto 사용
+    except: pass
 
-# 데이터 파일
 store = JsonStore('pt1_final_v15.json')
 
-# [디자인/스크롤 해결] 터치 시 자동 스크롤을 강제 실행하는 커스텀 입력창
+# [커스텀 입력창] 터치 시 화면을 항목 위치에 맞춰 올림
 class KTextInput(TextInput):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.font_name = K_FONT
         self.multiline = False
         self.font_size = '16sp'
-        # 글씨 아래로 내림 적용
         self.padding = [dp(10), dp(18), dp(10), dp(8)] 
 
-    # [핵심 수정] 터치 순간을 감지하여 스크롤 뷰를 강제로 밀어올림
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos) and not self.disabled:
-            # 부모 뷰(ScrollView)를 찾음
             target = self.parent
             while target and not isinstance(target, ScrollView):
                 target = target.parent
             
-            # ScrollView를 찾았다면 강제 스크롤 실행
             if target:
-                # 1단계: 터치 즉시 여유 공간을 확보하며 이동 (0.1초 뒤)
-                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(500)), 0.1)
-                # 2단계: 키보드가 다 올라온 후 확실히 맨 위에 고정 (0.4초 뒤)
-                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(500)), 0.4)
+                # [수정] 터치한 칸이 화면의 상단 1/4 지점에 오도록 설정 (아이템 이름 바로 아래 보이게)
+                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(350)), 0.1)
+                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(350)), 0.3)
         return super().on_touch_down(touch)
 
 class SBtn(Button):
@@ -80,7 +74,6 @@ def show_confirm(title, text, callback=None):
     close_btn.bind(on_release=popup.dismiss)
     popup.open()
 
-# --- 1. 메인 화면 ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh_list()
     def refresh_list(self, query=""):
@@ -111,7 +104,6 @@ class MainMenu(Screen):
         btn.bind(on_release=lambda x: [store.put(ti.text, slots=[{"이름":f"슬롯{i+1}","inven":[],"photos":[]} for i in range(6)]), popup.dismiss(), self.refresh_list()] if ti.text else None); popup.open()
     def go_slots(self, name): self.manager.cur_acc = name; self.manager.current = 'slots'
 
-# --- 2. 슬롯 화면 ---
 class Slots(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; slots = store.get(acc)['slots']
@@ -125,14 +117,12 @@ class Slots(Screen):
         self.add_widget(layout)
     def go_detail(self, idx): self.manager.cur_idx = idx; self.manager.current = 'detail'
 
-# --- 3. 캐릭터 상세 (기준 코드 기반 - 터치 강제 스크롤 적용) ---
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; idx = self.manager.cur_idx
         self.data = store.get(acc)['slots'][idx]; self.photo_list = self.data.get('photos', []) 
         root = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
         self.scroll = ScrollView(do_scroll_x=False)
-        # 하단 여백 극대화 (dp(1000))
         self.content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, padding=[0, 0, 0, dp(1000)])
         self.content.bind(minimum_height=self.content.setter('height'))
         
@@ -149,7 +139,6 @@ class Detail(Screen):
         for f in self.fields:
             row = BoxLayout(size_hint_y=None, height=dp(55))
             row.add_widget(Label(text=f, font_name=K_FONT, size_hint_x=0.3))
-            # [해결] Custom KTextInput 사용 (터치 시 자동 스크롤 강제 실행)
             ti = KTextInput(text=str(self.data.get(f, '')))
             row.add_widget(ti); self.inputs[f] = ti
             self.content.add_widget(row)
@@ -177,7 +166,6 @@ class Detail(Screen):
         slots[idx]['photos'] = self.photo_list
         store.put(acc, slots=slots); show_confirm("알림", "저장완료.")
 
-# --- 4. 인벤토리 ---
 class Inventory(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; idx = self.manager.cur_idx
@@ -196,7 +184,6 @@ class Inventory(Screen):
         self.list_box.clear_widgets()
         for i, val in enumerate(self.items):
             row = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
-            # 인벤토리에도 Custom KTextInput 적용 (자동 스크롤 강제 실행)
             ti = KTextInput(text=val)
             ti.bind(text=lambda instance, v, idx=i: self.update_val(idx, v))
             btn = Button(text="X", size_hint_x=None, width=dp(50), background_color=(0.7, 0.2, 0.2, 1))
