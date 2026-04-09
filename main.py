@@ -20,9 +20,11 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
 from kivy.metrics import dp
 
-# --- [0. 에러 로그 저장 시스템] ---
-# 앱이 튕기면 핸드폰 내부에 error_log.txt를 생성합니다.
+# --- [0. 에러 로그 공유 시스템] ---
+# 앱이 튕기면 안드로이드 공유 창을 띄워 로그를 전송할 수 있게 합니다.
 def logger(type, value, tb):
+    log_content = "".join(traceback.format_exception(type, value, tb))
+    # 내부 저장소에 임시 저장
     log_path = "error_log.txt"
     if platform == 'android':
         from android.storage import app_storage_path
@@ -30,7 +32,15 @@ def logger(type, value, tb):
     
     with open(log_path, "w", encoding='utf-8') as f:
         f.write("--- PT1 Manager Error Log ---\n")
-        f.write("".join(traceback.format_exception(type, value, tb)))
+        f.write(log_content)
+    
+    # plyer의 share 기능을 사용하여 공유창 띄우기
+    if platform == 'android':
+        try:
+            from plyer import share
+            share.share(log_path)
+        except:
+            pass
 
 sys.excepthook = logger
 
@@ -45,7 +55,7 @@ else:
     DF = None
 
 Window.softinput_mode = "below_target"
-store = JsonStore('priston_v2_7.json') # 새 버전으로 시작
+store = JsonStore('priston_v2_8.json') # 버전 업데이트
 
 # --- [2. 배경 레이아웃 클래스] ---
 class BgLayout(BoxLayout):
