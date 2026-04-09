@@ -8,7 +8,7 @@ package.domain = org.test
 # (적용) 소스 코드 위치 및 포함 확장자
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 1.2
+version = 1.3
 
 # (중요) 필수 라이브러리 목록 - plyer와 pillow가 반드시 포함되어야 합니다.
 requirements = python3,kivy==2.3.0,pillow,android,pyjnius,plyer
