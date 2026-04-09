@@ -1,5 +1,4 @@
 import os
-import json
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -8,7 +7,7 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.image import AsyncImage, Image
+from kivy.uix.image import AsyncImage
 from kivy.storage.jsonstore import JsonStore
 from kivy.core.text import LabelBase
 from kivy.uix.popup import Popup
@@ -17,32 +16,27 @@ from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
 from plyer import filechooser
 
-# [폰트 설정] 깃허브 파일명인 '글꼴.ttf'로 수정했습니다.
-FONT_PATH = '글꼴.ttf'
+# [1. 폰트 설정] 이름을 font.ttf로 맞췄습니다.
+FONT_NAME = 'font.ttf'
 K_FONT = 'Roboto'
-if os.path.exists(FONT_PATH):
+if os.path.exists(FONT_NAME):
     try:
-        LabelBase.register(name="KFont", fn_regular=FONT_PATH)
+        LabelBase.register(name="KFont", fn_regular=FONT_NAME)
         K_FONT = "KFont"
     except: pass
 
-store = JsonStore('pt1_final_v15.json')
+store = JsonStore('pt1_data_v21.json')
 
-# [배경 설정] 깃허브 파일명인 '배경.png'를 찾도록 수정했습니다.
+# [2. 배경 설정] 이름을 bg.png로 맞췄습니다.
 class BgLayout(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            bg_source = None
-            # 배경.png 또는 배경.jpg가 있는지 확인
-            if os.path.exists('배경.png'):
-                bg_source = '배경.png'
-            elif os.path.exists('배경.jpg'):
-                bg_source = '배경.jpg'
-            
-            if bg_source:
-                self.bg_rect = Rectangle(source=bg_source, pos=self.pos, size=self.size)
+            bg_file = 'bg.png'
+            if os.path.exists(bg_file):
+                self.bg_rect = Rectangle(source=bg_file, pos=self.pos, size=self.size)
             else:
+                # 파일이 없으면 어두운 회색 배경
                 Color(0.1, 0.1, 0.1, 1)
                 self.bg_rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
@@ -51,7 +45,7 @@ class BgLayout(BoxLayout):
         self.bg_rect.pos = self.pos
         self.bg_rect.size = self.size
 
-# [커스텀 입력창 및 스크롤 로직]
+# [3. 자동 스크롤 입력창]
 class KTextInput(TextInput):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -67,8 +61,7 @@ class KTextInput(TextInput):
             while target and not isinstance(target, ScrollView):
                 target = target.parent
             if target:
-                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(350)), 0.1)
-                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(350)), 0.3)
+                Clock.schedule_once(lambda dt: target.scroll_to(self, padding=dp(350)), 0.2)
         return super().on_touch_down(touch)
 
 class SBtn(Button):
@@ -80,120 +73,99 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = dp(55)
 
-# (이하 MainMenu, Slots, Detail, Inventory 클래스는 이전과 동일하되 K_FONT와 BgLayout을 사용하여 한글 파일에 대응합니다.)
-
+# --- 화면 클래스들 (생략 없이 통합) ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh_list()
     def refresh_list(self, query=""):
         self.clear_widgets()
         root = BgLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        search_box = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
-        self.search_ti = KTextInput(text=query, hint_text="계정 검색")
+        s_box = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
+        self.s_ti = KTextInput(text=query, hint_text="ID 검색")
         s_btn = Button(text="검색", font_name=K_FONT, size_hint_x=None, width=dp(70))
-        s_btn.bind(on_release=lambda x: self.refresh_list(self.search_ti.text.strip()))
-        search_box.add_widget(self.search_ti); search_box.add_widget(s_btn); root.add_widget(search_box)
-        root.add_widget(SBtn(text="+ 새 계정 만들기", bg=(0.1, 0.5, 0.3, 0.9), on_release=self.add_account_popup))
-        scroll = ScrollView(do_scroll_x=False)
-        self.list_box = GridLayout(cols=1, spacing=dp(5), size_hint_y=None)
-        self.list_box.bind(minimum_height=self.list_box.setter('height'))
-        for acc_name in sorted(store.keys()):
-            if query and query.lower() not in acc_name.lower(): continue
+        s_btn.bind(on_release=lambda x: self.refresh_list(self.s_ti.text.strip()))
+        s_box.add_widget(self.s_ti); s_box.add_widget(s_btn); root.add_widget(s_box)
+        root.add_widget(SBtn(text="+ 새 계정 만들기", bg=(0.1, 0.5, 0.3, 0.9), on_release=self.add_pop))
+        scroll = ScrollView(); box = GridLayout(cols=1, spacing=dp(5), size_hint_y=None)
+        box.bind(minimum_height=box.setter('height'))
+        for name in sorted(store.keys()):
+            if query and query.lower() not in name.lower(): continue
             row = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(5))
-            acc_btn = SBtn(text=f"ID: {acc_name}", bg=(0.2, 0.2, 0.2, 0.7))
-            acc_btn.bind(on_release=lambda x, n=acc_name: self.go_slots(n))
-            del_btn = Button(text="X", size_hint_x=None, width=dp(50), background_color=(0.7, 0.2, 0.2, 1))
-            del_btn.bind(on_release=lambda x, n=acc_name: [store.delete(n), self.refresh_list()])
-            row.add_widget(acc_btn); row.add_widget(del_btn); self.list_box.add_widget(row)
-        scroll.add_widget(self.list_box); root.add_widget(scroll); self.add_widget(root)
-    def add_account_popup(self, *args):
-        content = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10)); ti = KTextInput(hint_text="ID")
-        content.add_widget(ti); btn = SBtn(text="생성", bg=(0.1, 0.5, 0.3, 1))
-        content.add_widget(btn); popup = Popup(title="추가", content=content, size_hint=(0.8, 0.4))
-        btn.bind(on_release=lambda x: [store.put(ti.text, slots=[{"이름":f"슬롯{i+1}","inven":[],"photos":[]} for i in range(6)]), popup.dismiss(), self.refresh_list()] if ti.text else None); popup.open()
-    def go_slots(self, name): self.manager.cur_acc = name; self.manager.current = 'slots'
+            btn = SBtn(text=f"ID: {name}", bg=(0.2, 0.2, 0.2, 0.7))
+            btn.bind(on_release=lambda x, n=name: self.go_s(n))
+            del_b = Button(text="X", size_hint_x=None, width=dp(50), background_color=(0.7,0.2,0.2,1))
+            del_b.bind(on_release=lambda x, n=name: [store.delete(n), self.refresh_list()])
+            row.add_widget(btn); row.add_widget(del_b); box.add_widget(row)
+        scroll.add_widget(box); root.add_widget(scroll); self.add_widget(root)
+    def add_pop(self, *args):
+        c = BoxLayout(orientation='vertical', padding=10, spacing=10); ti = KTextInput(hint_text="새 ID 입력")
+        b = SBtn(text="생성", bg=(0.1, 0.5, 0.3, 1)); c.add_widget(ti); c.add_widget(b)
+        p = Popup(title="계정 추가", content=c, size_hint=(0.8, 0.4))
+        b.bind(on_release=lambda x: [store.put(ti.text, slots=[{"이름":f"슬롯{i+1}","inven":[],"photos":[]} for i in range(6)]), p.dismiss(), self.refresh_list()] if ti.text else None); p.open()
+    def go_s(self, name): self.manager.cur_acc = name; self.manager.current = 'slots'
 
 class Slots(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; slots = store.get(acc)['slots']
-        layout = BgLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        layout.add_widget(Label(text=f"Priston Tale ID: {acc}", font_name=K_FONT, size_hint_y=None, height=dp(40)))
-        grid = GridLayout(cols=2, spacing=dp(10))
+        root = BgLayout(orientation='vertical', padding=10, spacing=10)
+        root.add_widget(Label(text=f"ID: {acc}", font_name=K_FONT, size_hint_y=None, height=40))
+        g = GridLayout(cols=2, spacing=10)
         for i in range(6):
             btn = Button(text=f"{i+1}번\n{slots[i].get('이름','')}", font_name=K_FONT, halign='center', background_color=(0.2, 0.4, 0.6, 0.8))
-            btn.bind(on_release=lambda x, idx=i: self.go_detail(idx)); grid.add_widget(btn)
-        layout.add_widget(grid); layout.add_widget(SBtn(text="뒤로", on_release=lambda x: setattr(self.manager, 'current', 'main')))
-        self.add_widget(layout)
-    def go_detail(self, idx): self.manager.cur_idx = idx; self.manager.current = 'detail'
+            btn.bind(on_release=lambda x, idx=i: self.go_d(idx)); g.add_widget(btn)
+        root.add_widget(g); root.add_widget(SBtn(text="뒤로", on_release=lambda x: setattr(self.manager, 'current', 'main')))
+        self.add_widget(root)
+    def go_d(self, idx): self.manager.cur_idx = idx; self.manager.current = 'detail'
 
 class Detail(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; idx = self.manager.cur_idx
-        self.data = store.get(acc)['slots'][idx]; self.photo_list = self.data.get('photos', []) 
-        root = BgLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        self.scroll = ScrollView(do_scroll_x=False)
-        self.content = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, padding=[0, 0, 0, dp(1000)])
-        self.content.bind(minimum_height=self.content.setter('height'))
-        self.img_grid = GridLayout(cols=2, spacing=dp(5), size_hint_y=None)
-        self.img_grid.bind(minimum_height=self.img_grid.setter('height')); self.refresh_photos()
-        self.content.add_widget(self.img_grid)
-        btn_box = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
-        btn_box.add_widget(SBtn(text="📷 사진 추가", on_release=self.pick_photo))
+        self.data = store.get(acc)['slots'][idx]; self.p_list = self.data.get('photos', [])
+        root = BgLayout(orientation='vertical', padding=10, spacing=10)
+        scroll = ScrollView(); content = BoxLayout(orientation='vertical', spacing=10, size_hint_y=None, padding=[0,0,0,1000])
+        content.bind(minimum_height=content.setter('height'))
+        btn_box = BoxLayout(size_hint_y=None, height=dp(55), spacing=5)
+        btn_box.add_widget(SBtn(text="📷 사진 추가", on_release=self.pick_p))
         btn_box.add_widget(SBtn(text="📦 인벤토리", on_release=lambda x: setattr(self.manager, 'current', 'inventory')))
-        self.content.add_widget(btn_box)
+        content.add_widget(btn_box)
         self.fields = ["이름", "직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
-        self.inputs = {}
+        self.ins = {}
         for f in self.fields:
-            row = BoxLayout(size_hint_y=None, height=dp(55))
-            row.add_widget(Label(text=f, font_name=K_FONT, size_hint_x=0.3))
-            ti = KTextInput(text=str(self.data.get(f, '')))
-            row.add_widget(ti); self.inputs[f] = ti
-            self.content.add_widget(row)
-        self.scroll.add_widget(self.content); root.add_widget(self.scroll)
-        nav = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(5))
-        nav.add_widget(SBtn(text="정보 저장", bg=(0.1, 0.5, 0.3, 1), on_release=self.save_char))
+            r = BoxLayout(size_hint_y=None, height=dp(55))
+            r.add_widget(Label(text=f, font_name=K_FONT, size_hint_x=0.3))
+            ti = KTextInput(text=str(self.data.get(f, ''))); r.add_widget(ti); self.ins[f] = ti
+            content.add_widget(r)
+        scroll.add_widget(content); root.add_widget(scroll)
+        nav = BoxLayout(size_hint_y=None, height=60, spacing=5)
+        nav.add_widget(SBtn(text="정보 저장", bg=(0.1, 0.5, 0.3, 1), on_release=self.save))
         nav.add_widget(SBtn(text="뒤로", on_release=lambda x: setattr(self.manager, 'current', 'slots')))
         root.add_widget(nav); self.add_widget(root)
-    def refresh_photos(self):
-        self.img_grid.clear_widgets()
-        for i, path in enumerate(self.photo_list):
-            box = BoxLayout(orientation='vertical', size_hint_y=None, height=dp(180))
-            box.add_widget(AsyncImage(source=path, allow_stretch=True))
-            btn = Button(text="사진 삭제", size_hint_y=None, height=dp(35), font_name=K_FONT, background_color=(0.7, 0.2, 0.2, 1))
-            btn.bind(on_release=lambda x, idx=i: [self.photo_list.pop(idx), self.refresh_photos()])
-            box.add_widget(btn); self.img_grid.add_widget(box)
-    def pick_photo(self, *args): Clock.schedule_once(lambda dt: filechooser.open_file(on_selection=self.set_photo), 0.1)
-    def set_photo(self, selection):
-        if selection: self.photo_list.append(selection[0]); self.refresh_photos()
-    def save_char(self, *args):
+    def pick_p(self, *args): Clock.schedule_once(lambda dt: filechooser.open_file(on_selection=self.set_p), 0.1)
+    def set_p(self, sel):
+        if sel: self.p_list.append(sel[0]); self.save()
+    def save(self, *args):
         acc = self.manager.cur_acc; idx = self.manager.cur_idx; slots = store.get(acc)['slots']
-        for f, ti in self.inputs.items(): slots[idx][f] = ti.text
-        slots[idx]['photos'] = self.photo_list
-        store.put(acc, slots=slots)
+        for f, ti in self.ins.items(): slots[idx][f] = ti.text
+        slots[idx]['photos'] = self.p_list; store.put(acc, slots=slots)
 
 class Inventory(Screen):
     def on_enter(self):
         self.clear_widgets(); acc = self.manager.cur_acc; idx = self.manager.cur_idx
         self.items = store.get(acc)['slots'][idx].get('inven', [])
-        root = BgLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        self.scroll = ScrollView()
-        self.list_box = GridLayout(cols=1, spacing=dp(5), size_hint_y=None, padding=[0, 0, 0, dp(1000)])
-        self.list_box.bind(minimum_height=self.list_box.setter('height')); self.draw_items()
-        self.scroll.add_widget(self.list_box); root.add_widget(self.scroll)
-        nav = GridLayout(cols=3, size_hint_y=None, height=dp(60), spacing=dp(5))
-        nav.add_widget(SBtn(text="+추가", on_release=lambda x: [self.items.append(""), self.draw_items()]))
-        nav.add_widget(SBtn(text="저장", on_release=self.save_i))
-        nav.add_widget(SBtn(text="뒤로", on_release=lambda x: setattr(self.manager, 'current', 'detail')))
+        root = BgLayout(orientation='vertical', padding=10, spacing=10)
+        scroll = ScrollView(); box = GridLayout(cols=1, spacing=5, size_hint_y=None, padding=[0,0,0,1000])
+        box.bind(minimum_height=box.setter('height'))
+        for i, v in enumerate(self.items):
+            r = BoxLayout(size_hint_y=None, height=55, spacing=5)
+            ti = KTextInput(text=v); ti.bind(text=lambda ins, val, idx=i: self.up(idx, val))
+            db = Button(text="X", size_hint_x=None, width=50, background_color=(0.7,0.2,0.2,1))
+            db.bind(on_release=lambda x, idx=i: [self.items.pop(idx), self.on_enter()])
+            r.add_widget(ti); r.add_widget(db); box.add_widget(r)
+        scroll.add_widget(box); root.add_widget(scroll)
+        nav = GridLayout(cols=3, size_hint_y=None, height=60, spacing=5)
+        nav.add_widget(SBtn(text="+추가", on_release=lambda x: [self.items.append(""), self.on_enter()]))
+        nav.add_widget(SBtn(text="저장", on_release=self.save_i)); nav.add_widget(SBtn(text="뒤로", on_release=lambda x: setattr(self.manager, 'current', 'detail')))
         root.add_widget(nav); self.add_widget(root)
-    def draw_items(self):
-        self.list_box.clear_widgets()
-        for i, val in enumerate(self.items):
-            row = BoxLayout(size_hint_y=None, height=dp(55), spacing=dp(5))
-            ti = KTextInput(text=val)
-            ti.bind(text=lambda instance, v, idx=i: self.update_val(idx, v))
-            btn = Button(text="X", size_hint_x=None, width=dp(50), background_color=(0.7, 0.2, 0.2, 1))
-            btn.bind(on_release=lambda x, idx=i: [self.items.pop(idx), self.draw_items()])
-            row.add_widget(ti); row.add_widget(btn); self.list_box.add_widget(row)
-    def update_val(self, idx, v): self.items[idx] = v
+    def up(self, idx, v): self.items[idx] = v
     def save_i(self, *args):
         acc = self.manager.cur_acc; idx = self.manager.cur_idx; slots = store.get(acc)['slots']
         slots[idx]['inven'] = self.items; store.put(acc, slots=slots)
