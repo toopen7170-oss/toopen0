@@ -5,7 +5,7 @@ package.domain = org.pt1
 source.dir = .
 # ttf, png 파일이 확실히 포함되도록 체크
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 2.6
+version = 2.7
 
 # plyer가 있으면 사진첩 접근이 가능하므로 유지
 requirements = python3,kivy==2.3.0,plyer,android,setuptools
