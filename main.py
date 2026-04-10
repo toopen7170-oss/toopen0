@@ -1,5 +1,6 @@
 import os
-import json
+import sys
+import traceback
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -12,265 +13,226 @@ from kivy.uix.image import Image
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.popup import Popup
 from kivy.core.text import LabelBase
+from kivy.core.window import Window
 from kivy.metrics import dp
 from kivy.utils import platform
+from plyer import filechooser, share
 
-# 폰트 설정 (font.ttf 파일이 같은 폴더에 있어야 합니다)
+# [핵심] 키보드가 입력창을 가리지 않도록 설정
+Window.softinput_mode = 'below_target'
+
+# 에러 로그 시스템 (오류 발생 시 error_log.txt 생성 및 공유)
+def logger(type, value, tb):
+    log_content = "".join(traceback.format_exception(type, value, tb))
+    log_path = os.path.join(os.path.dirname(__file__), "error_log.txt")
+    with open(log_path, "w", encoding='utf-8') as f:
+        f.write("--- PT1 Manager Error Report ---\n")
+        f.write(log_content)
+    try: share.share(log_path)
+    except: pass
+sys.excepthook = logger
+
+# 폰트 등록
 FONT_NAME = "KFont"
-FONT_PATH = "font.ttf"
-if os.path.exists(FONT_PATH):
-    LabelBase.register(name=FONT_NAME, fn_regular=FONT_PATH)
-else:
-    FONT_NAME = None
+if os.path.exists("font.ttf"):
+    LabelBase.register(name=FONT_NAME, fn_regular="font.ttf")
+else: FONT_NAME = None
 
-store = JsonStore('priston_data_v4.json')
+store = JsonStore('priston_v4_final.json')
 
-# --- 공통 스타일 위젯 ---
-class StyledButton(Button):
-    def __init__(self, bg_color=(0.2, 0.2, 0.2, 1), **kwargs):
-        super().__init__(**kwargs)
+# --- 공통 스타일 ---
+class SBtn(Button):
+    def __init__(self, bg=(0.2, 0.2, 0.2, 1), **kw):
+        super().__init__(**kw)
         self.font_name = FONT_NAME
         self.background_normal = ''
-        self.background_color = bg_color
+        self.background_color = bg
         self.size_hint_y = None
         self.height = dp(55)
-        self.font_size = '16sp'
 
-class StyledInput(TextInput):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+class SInput(TextInput):
+    def __init__(self, **kw):
+        super().__init__(**kw)
         self.font_name = FONT_NAME
-        self.multiline = False
         self.size_hint_y = None
         self.height = dp(50)
+        self.multiline = False
         self.padding = [dp(10), dp(12)]
 
-# --- 1. 메인 화면 (강력한 전체 검색 기능) ---
+# --- 1. 메인 화면 (전체 검색 및 계정 관리) ---
 class MainScreen(Screen):
-    def on_enter(self): self.refresh_list()
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def on_enter(self): self.refresh()
+    def __init__(self, **kw):
+        super().__init__(**kw)
         layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
         
-        # 제목 및 검색바
-        layout.add_widget(Label(text="[PT1 통합 검색 매니저]", font_name=FONT_NAME, size_hint_y=None, height=dp(50), font_size='20sp'))
-        
-        self.search_input = StyledInput(hint_text="아이템, 직업, 레벨, 내용물 검색...")
-        self.search_input.bind(text=self.refresh_list)
-        layout.add_widget(self.search_input)
+        # 배경 (bg.png가 있으면 로드)
+        if os.path.exists('bg.png'):
+            layout.add_widget(Image(source='bg.png', size_hint_y=None, height=dp(100)))
 
-        # 계정 추가 버튼
-        add_btn = StyledButton(text="+ 새 계정 만들기", bg_color=(0.1, 0.5, 0.2, 1))
-        add_btn.bind(on_release=self.add_account_popup)
-        layout.add_widget(add_btn)
+        self.si = SInput(hint_text="전체 검색 (아이템, 직업, 레벨, 인벤토리 등)")
+        self.si.bind(text=self.refresh)
+        layout.add_widget(self.si)
 
-        # 계정 리스트 (스크롤)
-        self.scroll = ScrollView()
-        self.account_list = GridLayout(cols=1, spacing=dp(5), size_hint_y=None)
-        self.account_list.bind(minimum_height=self.account_list.setter('height'))
-        self.scroll.add_widget(self.account_list)
-        layout.add_widget(self.scroll)
-        
+        add_btn = SBtn(text="+ 새 계정 생성", bg=(0.1, 0.6, 0.3, 1))
+        add_btn.bind(on_release=self.add_acc_pop); layout.add_widget(add_btn)
+
+        self.sc = ScrollView()
+        self.gl = GridLayout(cols=1, spacing=dp(5), size_hint_y=None)
+        self.gl.bind(minimum_height=self.gl.setter('height'))
+        self.sc.add_widget(self.gl); layout.add_widget(self.sc)
         self.add_widget(layout)
 
-    def refresh_list(self, *args):
-        self.account_list.clear_widgets()
-        query = self.search_input.text.lower()
-        
-        for acc_id in sorted(store.keys()):
-            acc_data = store.get(acc_id)
-            match_found = not query or query in acc_id.lower()
-            
-            # 모든 데이터 필드 검색 (직업, 무기, 인벤토리 등)
-            if not match_found:
-                for char_idx in acc_data['chars']:
-                    char = acc_data['chars'][char_idx]
-                    combined_text = " ".join(str(v).lower() for v in char.values())
-                    if query in combined_text:
-                        match_found = True
-                        break
-            
-            if match_found:
+    def refresh(self, *a):
+        self.gl.clear_widgets()
+        q = self.si.text.lower()
+        for acc in sorted(store.keys()):
+            data = store.get(acc)
+            # 전체 텍스트 검색 로직
+            txt_pool = acc.lower() + " " + json.dumps(data, ensure_ascii=False).lower()
+            if not q or q in txt_pool:
                 row = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(5))
-                btn = StyledButton(text=f"계정: {acc_id}", bg_color=(0.2, 0.3, 0.5, 1))
-                btn.bind(on_release=lambda x, a=acc_id: self.go_to_account(a))
-                
-                del_btn = Button(text="삭제", size_hint_x=0.2, font_name=FONT_NAME, background_color=(0.7, 0.2, 0.2, 1))
-                del_btn.bind(on_release=lambda x, a=acc_id: self.confirm_delete(a))
-                
-                row.add_widget(btn)
-                row.add_widget(del_btn)
-                self.account_list.add_widget(row)
+                btn = SBtn(text=f"계정: {acc}", bg=(0.2, 0.3, 0.6, 1))
+                btn.bind(on_release=lambda x, n=acc: self.go_acc(n))
+                del_btn = Button(text="삭제", size_hint_x=0.2, font_name=FONT_NAME, background_color=(0.8, 0.2, 0.2, 1))
+                del_btn.bind(on_release=lambda x, n=acc: self.confirm_del(n))
+                row.add_widget(btn); row.add_widget(del_btn); self.gl.add_widget(row)
 
-    def confirm_delete(self, acc_id):
-        content = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        content.add_widget(Label(text=f"'{acc_id}' 계정을 삭제하시겠습니까?", font_name=FONT_NAME))
-        btns = BoxLayout(spacing=dp(10))
-        y_btn = StyledButton(text="삭제", bg_color=(0.8, 0.1, 0.1, 1))
-        n_btn = StyledButton(text="취소")
-        btns.add_widget(y_btn); btns.add_widget(n_btn); content.add_widget(btns)
-        
-        pop = Popup(title="경고", content=content, size_hint=(0.8, 0.3), title_font=FONT_NAME)
-        y_btn.bind(on_release=lambda x: [store.delete(acc_id), self.refresh_list(), pop.dismiss()])
-        n_btn.bind(on_release=pop.dismiss); pop.open()
+    def confirm_del(self, n):
+        c = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
+        c.add_widget(Label(text=f"'{n}' 계정을 삭제할까요?", font_name=FONT_NAME))
+        b = BoxLayout(spacing=dp(10))
+        y = SBtn(text="삭제", bg=(0.8, 0.1, 0.1, 1)); n_b = SBtn(text="취소")
+        b.add_widget(y); b.add_widget(n_b); c.add_widget(b)
+        pop = Popup(title="확인", content=c, size_hint=(0.8, 0.4), title_font=FONT_NAME)
+        y.bind(on_release=lambda x: [store.delete(n), self.refresh(), pop.dismiss()])
+        n_b.bind(on_release=pop.dismiss); pop.open()
 
-    def add_account_popup(self, *args):
-        content = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        inp = StyledInput(hint_text="새 계정 ID")
-        btn = StyledButton(text="생성", bg_color=(0.1, 0.5, 0.2, 1))
-        content.add_widget(inp); content.add_widget(btn)
-        pop = Popup(title="계정 추가", content=content, size_hint=(0.8, 0.4), title_font=FONT_NAME)
-        
+    def add_acc_pop(self, *a):
+        c = BoxLayout(orientation='vertical', padding=dp(20), spacing=dp(10))
+        i = SInput(hint_text="계정 ID 입력")
+        b = SBtn(text="추가", bg=(0.1, 0.6, 0.3, 1))
+        c.add_widget(i); c.add_widget(b)
+        pop = Popup(title="계정 추가", content=c, size_hint=(0.8, 0.4), title_font=FONT_NAME)
         def save(x):
-            if inp.text.strip():
-                # 6개 캐릭터 슬롯 초기화
-                chars = {str(i): {"이름": f"슬롯 {i}", "inventory": ""} for i in range(1, 7)}
-                store.put(inp.text.strip(), chars=chars)
-                pop.dismiss(); self.refresh_list()
-        btn.bind(on_release=save); pop.open()
+            if i.text.strip():
+                store.put(i.text.strip(), chars={str(k): {"이름": f"캐릭터 {k}"} for k in range(1, 7)})
+                pop.dismiss(); self.refresh()
+        b.bind(on_release=save); pop.open()
 
-    def go_to_account(self, acc_id):
-        self.manager.current_acc = acc_id
-        self.manager.current = 'char_select'
+    def go_acc(self, n):
+        self.manager.cur_acc = n; self.manager.current = 'char_select'
 
 # --- 2. 캐릭터 선택 화면 (6개 슬롯) ---
-class CharSelectScreen(Screen):
+class CharSelect(Screen):
     def on_enter(self):
         self.layout.clear_widgets()
-        acc_id = self.manager.current_acc
-        acc_data = store.get(acc_id)
-        
-        self.layout.add_widget(Label(text=f"[{acc_id}] 캐릭터 선택", font_name=FONT_NAME, size_hint_y=None, height=dp(50)))
-        
+        acc = self.manager.cur_acc
+        self.layout.add_widget(Label(text=f"[{acc}] 캐릭터 선택", font_name=FONT_NAME, size_hint_y=None, height=dp(50)))
         grid = GridLayout(cols=2, spacing=dp(10))
+        chars = store.get(acc)['chars']
         for i in range(1, 7):
-            char_info = acc_data['chars'].get(str(i), {})
-            char_name = char_info.get("이름", f"슬롯 {i}")
-            btn = StyledButton(text=char_name, bg_color=(0.3, 0.3, 0.4, 1))
-            btn.bind(on_release=lambda x, idx=i: self.go_detail(idx))
-            grid.add_widget(btn)
-        
+            name = chars.get(str(i), {}).get("이름", f"슬롯 {i}")
+            btn = SBtn(text=name, bg=(0.3, 0.4, 0.5, 1))
+            btn.bind(on_release=lambda x, idx=i: self.go_det(idx)); grid.add_widget(btn)
         self.layout.add_widget(grid)
-        back = StyledButton(text="뒤로가기", bg_color=(0.4, 0.4, 0.4, 1))
-        back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main'))
-        self.layout.add_widget(back)
+        back = SBtn(text="뒤로가기", bg=(0.4, 0.4, 0.4, 1))
+        back.bind(on_release=lambda x: setattr(self.manager, 'current', 'main')); self.layout.add_widget(back)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10))
-        self.add_widget(self.layout)
-    def go_detail(self, idx):
-        self.manager.current_char_idx = str(idx)
-        self.manager.current = 'detail'
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.layout = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10)); self.add_widget(self.layout)
+    def go_det(self, i):
+        self.manager.cur_idx = str(i); self.manager.current = 'detail'
 
-# --- 3. 캐릭터 세부 내역 (수정, 사진, 인벤토리 연동) ---
-class DetailScreen(Screen):
+# --- 3. 캐릭터 세부 내역 (입력 및 사진) ---
+class Detail(Screen):
     def on_enter(self):
         self.root.clear_widgets()
-        acc_id = self.manager.current_acc
-        char_idx = self.manager.current_char_idx
-        self.char_data = store.get(acc_id)['chars'][char_idx]
+        self.data = store.get(self.manager.cur_acc)['chars'][self.manager.cur_idx]
         
-        scroll = ScrollView()
-        container = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10), size_hint_y=None)
-        container.bind(minimum_height=container.setter('height'))
+        sc = ScrollView()
+        box = BoxLayout(orientation='vertical', padding=dp(15), spacing=dp(10), size_hint_y=None)
+        box.bind(minimum_height=box.setter('height'))
 
-        # 사진 영역
-        img_path = self.char_data.get('photo', '')
-        self.img_widget = Image(source=img_path if os.path.exists(img_path) else '', size_hint_y=None, height=dp(200))
-        container.add_widget(self.img_widget)
+        # 사진 표시
+        p_path = self.data.get('photo', '')
+        self.img = Image(source=p_path if os.path.exists(p_path) else '', size_hint_y=None, height=dp(250))
+        box.add_widget(self.img)
         
-        photo_box = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
-        add_p = StyledButton(text="사진 변경", bg_color=(0.2, 0.4, 0.6, 1))
-        del_p = StyledButton(text="사진 삭제", bg_color=(0.6, 0.2, 0.2, 1))
-        photo_box.add_widget(add_p); photo_box.add_widget(del_p); container.add_widget(photo_box)
+        p_btns = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+        b1 = SBtn(text="사진 추가", bg=(0.2, 0.5, 0.8, 1)); b1.bind(on_release=self.pick_photo)
+        b2 = SBtn(text="사진 삭제", bg=(0.8, 0.2, 0.2, 1)); b2.bind(on_release=self.del_photo)
+        p_btns.add_widget(b1); p_btns.add_widget(b2); box.add_widget(p_btns)
 
-        # 인벤토리 이동 버튼
-        inv_btn = StyledButton(text="📦 인벤토리 관리 (전체화면)", bg_color=(0.6, 0.4, 0.2, 1))
-        inv_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory'))
-        container.add_widget(inv_btn)
+        # 인벤토리 버튼
+        inv = SBtn(text="🎒 인벤토리 관리 (전체화면)", bg=(0.7, 0.5, 0.2, 1))
+        inv.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory')); box.add_widget(inv)
 
-        # 입력 필드들
-        self.inputs = {}
+        self.ins = {}
         fields = ["이름", "직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
         for f in fields:
-            row = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(5))
-            row.add_widget(Label(text=f, font_name=FONT_NAME, size_hint_x=0.3))
-            ti = StyledInput(text=str(self.char_data.get(f, '')))
-            self.inputs[f] = ti
-            row.add_widget(ti)
-            container.add_widget(row)
+            r = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(10))
+            r.add_widget(Label(text=f, font_name=FONT_NAME, size_hint_x=0.3))
+            ti = SInput(text=str(self.data.get(f, ''))); self.ins[f] = ti
+            r.add_widget(ti); box.add_widget(r)
 
-        # 하단 버튼
-        btn_row = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(10))
-        save_b = StyledButton(text="캐릭터 저장", bg_color=(0.1, 0.6, 0.3, 1))
-        save_b.bind(on_release=self.save_data)
-        back_b = StyledButton(text="뒤로가기", bg_color=(0.4, 0.4, 0.4, 1))
-        back_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'char_select'))
+        btns = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(10))
+        s = SBtn(text="저장", bg=(0.1, 0.6, 0.3, 1)); s.bind(on_release=self.save)
+        b = SBtn(text="뒤로", bg=(0.4, 0.4, 0.4, 1)); b.bind(on_release=lambda x: setattr(self.manager, 'current', 'char_select'))
+        btns.add_widget(s); btns.add_widget(b); box.add_widget(btns)
         
-        btn_row.add_widget(save_b); btn_row.add_widget(back_b)
-        container.add_widget(btn_row)
-        scroll.add_widget(container); self.root.add_widget(scroll)
+        sc.add_widget(box); self.root.add_widget(sc)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.root = BoxLayout(orientation='vertical')
-        self.add_widget(self.root)
+    def __init__(self, **kw):
+        super().__init__(**kw); self.root = BoxLayout(orientation='vertical'); self.add_widget(self.root)
+    
+    def pick_photo(self, *a):
+        filechooser.open_file(on_selection=self.on_photo)
+    def on_photo(self, sel):
+        if sel: self.img.source = sel[0]
+    def del_photo(self, *a):
+        self.img.source = ''
 
-    def save_data(self, *args):
-        acc_id = self.manager.current_acc
-        char_idx = self.manager.current_char_idx
-        acc_data = store.get(acc_id)
-        
-        for f, ti in self.inputs.items():
-            self.char_data[f] = ti.text
-        
-        acc_data['chars'][char_idx] = self.char_data
-        store.put(acc_id, **acc_data)
+    def save(self, *a):
+        acc = store.get(self.manager.cur_acc)
+        for f, ti in self.ins.items(): self.data[f] = ti.text
+        self.data['photo'] = self.img.source
+        acc['chars'][self.manager.cur_idx] = self.data
+        store.put(self.manager.cur_acc, **acc)
         self.manager.current = 'char_select'
 
-# --- 4. 인벤토리 화면 (전체화면 편집) ---
-class InventoryScreen(Screen):
+# --- 4. 인벤토리 화면 ---
+class Inventory(Screen):
     def on_enter(self):
-        acc_id = self.manager.current_acc
-        char_idx = self.manager.current_char_idx
-        self.char_data = store.get(acc_id)['chars'][char_idx]
-        self.ti.text = self.char_data.get('inventory', '')
+        self.data = store.get(self.manager.cur_acc)['chars'][self.manager.cur_idx]
+        self.ti.text = self.data.get('inventory', '')
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        layout = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
-        layout.add_widget(Label(text="인벤토리 상세 편집", font_name=FONT_NAME, size_hint_y=None, height=dp(50)))
-        
-        self.ti = TextInput(font_name=FONT_NAME, multiline=True, font_size='18sp', padding=[dp(10), dp(10)])
-        layout.add_widget(self.ti)
-        
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        l = BoxLayout(orientation='vertical', padding=dp(10), spacing=dp(10))
+        l.add_widget(Label(text="인벤토리 전체 편집", font_name=FONT_NAME, size_hint_y=None, height=dp(50)))
+        self.ti = TextInput(font_name=FONT_NAME, multiline=True, font_size='18sp')
+        l.add_widget(self.ti)
         btns = BoxLayout(size_hint_y=None, height=dp(60), spacing=dp(10))
-        save = StyledButton(text="저장", bg_color=(0.1, 0.6, 0.3, 1))
-        save.bind(on_release=self.save_inv)
-        back = StyledButton(text="뒤로", bg_color=(0.4, 0.4, 0.4, 1))
-        back.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
-        btns.add_widget(save); btns.add_widget(back); layout.add_widget(btns)
-        self.add_widget(layout)
+        s = SBtn(text="저장", bg=(0.1, 0.6, 0.3, 1)); s.bind(on_release=self.save)
+        b = SBtn(text="뒤로", bg=(0.4, 0.4, 0.4, 1)); b.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
+        btns.add_widget(s); btns.add_widget(b); l.add_widget(btns)
+        self.add_widget(l)
 
-    def save_inv(self, *args):
-        acc_id = self.manager.current_acc
-        char_idx = self.manager.current_char_idx
-        acc_data = store.get(acc_id)
-        acc_data['chars'][char_idx]['inventory'] = self.ti.text
-        store.put(acc_id, **acc_data)
+    def save(self, *a):
+        acc = store.get(self.manager.cur_acc)
+        acc['chars'][self.manager.cur_idx]['inventory'] = self.ti.text
+        store.put(self.manager.cur_acc, **acc)
         self.manager.current = 'detail'
 
-# --- 앱 실행부 ---
-class PristonManagerApp(App):
+class PristonApp(App):
     def build(self):
         sm = ScreenManager(transition=FadeTransition())
-        sm.current_acc = ""; sm.current_char_idx = ""
-        sm.add_widget(MainScreen(name='main'))
-        sm.add_widget(CharSelectScreen(name='char_select'))
-        sm.add_widget(DetailScreen(name='detail'))
-        sm.add_widget(InventoryScreen(name='inventory'))
+        sm.cur_acc = ""; sm.cur_idx = ""
+        sm.add_widget(MainScreen(name='main')); sm.add_widget(CharSelect(name='char_select'))
+        sm.add_widget(Detail(name='detail')); sm.add_widget(Inventory(name='inventory'))
         return sm
 
 if __name__ == '__main__':
-    PristonManagerApp().run()
+    PristonApp().run()
