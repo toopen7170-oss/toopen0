@@ -17,8 +17,8 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- [1단계] 폰트 로드 안전화 작업 ---
-# 파일명은 점주님이 올리신 것과 동일하게 소문자 font.ttf로 고정합니다.
+# --- [1단계] 폰트 및 앱 아이콘 설정 ---
+# 폰트 파일명은 소문자 font.ttf로 고정합니다.
 FONT_FILE = "font.ttf"
 DF = None
 
@@ -33,10 +33,22 @@ try:
             fn_bolditalic=FONT_FILE
         )
         DF = "KFont"
-        # 시스템 기본 폰트 설정 (폰트가 있을 때만 적용)
         Config.set('kivy', 'default_font', ['KFont', FONT_FILE, FONT_FILE, FONT_FILE, FONT_FILE])
 except Exception as e:
     print(f"폰트 로드 실패: {e}")
+
+# 🎯 앱 아이콘 설정 (파일명: icon.png가 같은 폴더에 있어야 함)
+# 만약 파일이 없어도 앱은 켜지지만 기본 아이콘으로 나옵니다.
+if os.path.exists("icon.png"):
+    Config.set('kivy', 'icon', 'icon.png')
+
+# 안드로이드 사진첩 접근 권한 강제 요청 (앱 시작 시 작동)
+if platform == 'android':
+    try:
+        from android.permissions import request_permissions, Permission
+        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
+    except Exception as e:
+        print(f"Permission Error: {e}")
 
 # 키보드 위치 자동 조정
 Window.softinput_mode = "below_target"
@@ -65,6 +77,11 @@ class MainMenu(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        
+        # 🎯 메인화면 앱 이미지 추가 (파일명: main_image.png가 같은 폴더에 있어야 함)
+        if os.path.exists("main_image.png"):
+            self.layout.add_widget(Image(source="main_image.png", size_hint_y=0.2))
+            
         lbl = Label(text="[PT1 통합 검색]", font_size='22sp', size_hint_y=0.1)
         if DF: lbl.font_name = DF
         self.layout.add_widget(lbl)
@@ -136,6 +153,11 @@ class CharSelect(Screen):
         acc = self.manager.cur_acc
         d = store.get(acc)
         l = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        
+        # 🎯 캐릭터 선택화면 앱 이미지 추가 (파일명: char_image.png가 같은 폴더에 있어야 함)
+        if os.path.exists("char_image.png"):
+            l.add_widget(Image(source="char_image.png", size_hint_y=0.2))
+            
         lbl = Label(text=f"[{acc}] 캐릭터 선택", size_hint_y=0.1)
         if DF: lbl.font_name = DF
         l.add_widget(lbl)
@@ -163,8 +185,14 @@ class Detail(Screen):
         self.img = Image(source=img_src if img_src else '', size_hint_y=None, height=450); self.l.add_widget(self.img)
         br = BoxLayout(size_hint_y=None, height=130, spacing=10)
         btn_pic = SBtn(text="사진 변경", background_color=(0.2, 0.5, 0.8, 1)); btn_pic.bind(on_release=self.get_pic)
+        
+        # 🎯 사진 삭제 버튼 추가
+        btn_del_pic = Button(text="사진 삭제", background_color=(0.8, 0.2, 0.2, 1))
+        if DF: btn_del_pic.font_name = DF
+        btn_del_pic.bind(on_release=self.confirm_del_pic)
+        
         btn_inv = SBtn(text="인벤토리", background_color=(0.6, 0.4, 0.2, 1)); btn_inv.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory'))
-        br.add_widget(btn_pic); br.add_widget(btn_inv); self.l.add_widget(br)
+        br.add_widget(btn_pic); br.add_widget(btn_del_pic); br.add_widget(btn_inv); self.l.add_widget(br)
 
         fields = ["이름", "직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
         self.ins = {}
@@ -181,8 +209,13 @@ class Detail(Screen):
         self.l.add_widget(sv); self.l.add_widget(bk); sc.add_widget(self.l); self.add_widget(sc)
 
     def get_pic(self, *a):
+        # 🎯 안드로이드라면 /sdcard (사진첩) 폴더를 기본으로 엽니다.
         from kivy.uix.filechooser import FileChooserIconView
-        p_path = '/sdcard' if platform == 'android' else '.'
+        if platform == 'android':
+            p_path = '/sdcard/DCIM/Camera' # 카메라 폴더 우선
+            if not os.path.exists(p_path): p_path = '/sdcard'
+        else: p_path = '.'
+            
         fc = FileChooserIconView(path=p_path, filters=['*.jpg', '*.png', '*.jpeg'])
         btn = Button(text="결정", size_hint_y=0.2)
         if DF: btn.font_name = DF
@@ -191,6 +224,20 @@ class Detail(Screen):
         def sel(x):
             if fc.selection: self.img.source = fc.selection[0]; pop.dismiss()
         btn.bind(on_release=sel); pop.open()
+
+    # 🎯 사진 삭제 확인 기능 추가
+    def confirm_del_pic(self, *a):
+        c = BoxLayout(orientation='vertical', padding=15, spacing=15)
+        lbl = Label(text="사진을 삭제하겠습니까?", halign='center')
+        if DF: lbl.font_name = DF
+        c.add_widget(lbl)
+        btns = BoxLayout(spacing=10, size_hint_y=0.4)
+        ok = Button(text="삭제", background_color=(0.8, 0, 0, 1)); no = Button(text="취소")
+        if DF: ok.font_name = DF; no.font_name = DF
+        btns.add_widget(ok); btns.add_widget(no); c.add_widget(btns)
+        pop = Popup(title="주의", content=c, size_hint=(0.8, 0.4))
+        ok.bind(on_release=lambda x: [setattr(self.img, 'source', ''), pop.dismiss()])
+        no.bind(on_release=pop.dismiss); pop.open()
 
     def save(self, *a):
         acc, idx = self.manager.cur_acc, self.manager.cur_idx
@@ -230,6 +277,8 @@ class Inventory(Screen):
 # --- [4단계] 앱 구동 ---
 class PristonApp(App):
     def build(self):
+        # 🎯 앱 전체 폰트를 KFont로 기본 설정
+        if DF: self.font_name = DF
         sm = ScreenManager(transition=FadeTransition())
         sm.cur_acc = ""; sm.cur_idx = ""
         sm.add_widget(MainMenu(name='main')); sm.add_widget(CharSelect(name='char_select'))
