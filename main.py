@@ -17,22 +17,23 @@ from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 
-# --- [1단계] 폰트 강제 등록 (ㅁㅁ 깨짐 방지) ---
+# --- [1단계] 폰트 및 앱 설정 ---
 FONT_FILE = "font.ttf"
 DF = None
 
 if os.path.exists(FONT_FILE):
-    # 폰트가 있으면 시스템에 등록
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
     DF = "KFont"
-    # 앱 전체 기본 폰트 설정
     Config.set('kivy', 'default_font', ['KFont', FONT_FILE, FONT_FILE, FONT_FILE, FONT_FILE])
 
-# 키보드 입력창 가림 방지
+# 🎯 앱 아이콘 설정 (깃허브에 올리신 icon.png 적용)
+if os.path.exists("icon.png"):
+    Config.set('kivy', 'icon', 'icon.png')
+
 Window.softinput_mode = "below_target"
 store = JsonStore('priston_v1_1.json')
 
-# --- [2단계] 안드로이드 사진 권한 요청 (앱 실행 시 바로 팝업) ---
+# --- [2단계] 사진 권한 요청 (앱 실행 시 즉시) ---
 def ask_permission():
     if platform == 'android':
         try:
@@ -43,9 +44,9 @@ def ask_permission():
                 Permission.CAMERA
             ])
         except Exception as e:
-            print(f"Permission Request Error: {e}")
+            print(f"Permission Error: {e}")
 
-# --- [3단계] 공통 위젯 ---
+# --- [3단계] 커스텀 위젯 ---
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -60,20 +61,20 @@ class SBtn(Button):
         self.size_hint_y = None
         self.height = 150
 
-# --- [4단계] 화면 구성 ---
+# --- [4단계] 화면 구성 (이미지 적용) ---
 class MainMenu(Screen):
     def on_enter(self): self.refresh()
     def __init__(self, **kw):
         super().__init__(**kw)
         layout = BoxLayout(orientation='vertical', padding=15, spacing=10)
         
-        # 상단 이미지 (bg.png 적용)
+        # 🎯 메인 상단 배경 이미지 (bg.png 적용)
         if os.path.exists("bg.png"):
-            layout.add_widget(Image(source="bg.png", size_hint_y=0.2))
+            layout.add_widget(Image(source="bg.png", size_hint_y=0.25))
             
-        self.lbl = Label(text="[PT1 통합 검색]", font_size='22sp', size_hint_y=0.1)
-        if DF: self.lbl.font_name = DF
-        layout.add_widget(self.lbl)
+        lbl = Label(text="[PT1 통합 검색]", font_size='22sp', size_hint_y=0.1)
+        if DF: lbl.font_name = DF
+        layout.add_widget(lbl)
         
         s_box = BoxLayout(size_hint_y=None, height=120, spacing=5)
         self.stti = SInput(hint_text="계정/캐릭터 검색...")
@@ -143,9 +144,9 @@ class CharSelect(Screen):
         d = store.get(acc)
         l = BoxLayout(orientation='vertical', padding=15, spacing=10)
         
-        # 상단 이미지 (images.jpeg 적용)
+        # 🎯 캐릭터 선택 화면 상단 이미지 (images.jpeg 적용)
         if os.path.exists("images.jpeg"):
-            l.add_widget(Image(source="images.jpeg", size_hint_y=0.2))
+            l.add_widget(Image(source="images.jpeg", size_hint_y=0.25))
             
         lbl = Label(text=f"[{acc}] 캐릭터 선택", size_hint_y=0.1)
         if DF: lbl.font_name = DF
@@ -256,10 +257,8 @@ class Inventory(Screen):
         d = store.get(acc); d['chars'][idx]['inventory'] = self.ti.text
         store.put(acc, **d); self.manager.current = 'detail'
 
-# --- [5단계] 앱 메인 ---
 class PristonApp(App):
     def build(self):
-        # 실행 즉시 권한 요청
         ask_permission()
         sm = ScreenManager(transition=FadeTransition())
         sm.cur_acc = ""; sm.cur_idx = ""
