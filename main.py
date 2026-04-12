@@ -12,18 +12,15 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 from kivy.graphics import Rectangle, Color
 
-# [설정] 파일명 및 폰트 (파일이 없어도 앱이 튕기지 않게 체크함)
+# [필독] 파일 설정 - 파일이 없어도 앱이 절대 튕기지 않게 안전장치 강화
 BG_IMAGE = 'Images.jpeg'
 FONT_FILE = "NanumGothic.ttf"
 
-def get_font():
+def safe_font():
+    """폰트가 있으면 경로를 반환하고, 없으면 None을 반환하여 시스템 기본폰트를 쓰게 함"""
     if os.path.exists(FONT_FILE):
         return FONT_FILE
-    # 안드로이드 시스템 기본 한글 폰트 경로들 확인
-    paths = ["/system/fonts/NanumGothic.ttf", "/system/fonts/DroidSansFallback.ttf"]
-    for p in paths:
-        if os.path.exists(p): return p
-    return None # 기본 폰트 사용
+    return None # 여기서 None을 주면 튕기지 않고 영문/기본폰트로 나옵니다.
 
 class BackgroundScreen(Screen):
     def __init__(self, **kwargs):
@@ -32,7 +29,7 @@ class BackgroundScreen(Screen):
             if os.path.exists(BG_IMAGE):
                 self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
             else:
-                Color(0.1, 0.1, 0.1, 1)
+                Color(0.1, 0.1, 0.1, 1) # 이미지 없으면 어두운 배경
                 self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
 
@@ -41,21 +38,27 @@ class BackgroundScreen(Screen):
         self.rect.size = self.size
 
 class MainScreen(BackgroundScreen):
+    """메인 화면: 검색, 생성, 리스트"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        f = get_font()
+        f = safe_font()
         layout = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        
+        # 상단 타이틀
         layout.add_widget(Label(text="[PT1 통합 매니저]", font_size='28sp', font_name=f, size_hint_y=0.1))
         
+        # 검색창
         search_box = BoxLayout(size_hint_y=0.08, spacing=5)
         search_box.add_widget(TextInput(hint_text="계정/캐릭터 검색...", font_name=f, multiline=False))
         search_box.add_widget(Button(text="검색", font_name=f, size_hint_x=0.2))
         layout.add_widget(search_box)
         
+        # 계정 생성
         create_btn = Button(text="+ 새 계정 만들기", font_name=f, size_hint_y=0.1, background_color=(0.1, 0.6, 0.3, 1))
         create_btn.bind(on_release=self.show_create_popup)
         layout.add_widget(create_btn)
         
+        # 계정 리스트
         self.acc_list = BoxLayout(orientation='vertical', spacing=10, size_hint_y=0.5)
         self.add_account_row("계정: to", f)
         layout.add_widget(self.acc_list)
@@ -73,7 +76,7 @@ class MainScreen(BackgroundScreen):
         self.acc_list.add_widget(row)
 
     def show_create_popup(self, *args):
-        f = get_font()
+        f = safe_font()
         content = BoxLayout(orientation='vertical', padding=15, spacing=15)
         content.add_widget(TextInput(hint_text="ID 입력", font_name=f, font_size='22sp'))
         gen_btn = Button(text="생성", font_name=f, size_hint_y=0.4)
@@ -97,11 +100,12 @@ class MainScreen(BackgroundScreen):
         pop.open()
 
 class CharSelectScreen(BackgroundScreen):
+    """캐릭터 선택 화면 (슬롯 6개)"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        f = get_font()
+        f = safe_font()
         layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        layout.add_widget(Label(text="[to] 캐릭터 선택", font_name=f, size_hint_y=0.1))
+        layout.add_widget(Label(text="캐릭터 선택", font_name=f, size_hint_y=0.1))
         grid = GridLayout(cols=2, spacing=10)
         for i in range(1, 7):
             btn = Button(text=f"슬롯 {i}", font_name=f)
@@ -114,15 +118,19 @@ class CharSelectScreen(BackgroundScreen):
         self.add_widget(layout)
 
 class InventoryScreen(Screen):
+    """인벤토리 화면: 저장/삭제 버튼 한 줄씩 무한대"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        f = get_font()
+        f = safe_font()
         main_layout = BoxLayout(orientation='horizontal')
+        
+        # 왼쪽 카테고리
         side = BoxLayout(orientation='vertical', size_hint_x=0.25, spacing=1)
-        cats = ["양손무기", "한손무기", "갑옷", "ローブ", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
+        cats = ["양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀", "기타"]
         for c in cats: side.add_widget(Button(text=c, font_name=f, font_size='10sp'))
         main_layout.add_widget(side)
         
+        # 오른쪽 인벤토리 리스트
         right = BoxLayout(orientation='vertical', size_hint_x=0.75, padding=5)
         scroll = ScrollView()
         self.grid = GridLayout(cols=1, size_hint_y=None, spacing=3)
@@ -131,10 +139,16 @@ class InventoryScreen(Screen):
         scroll.add_widget(self.grid)
         right.add_widget(scroll)
         
-        bottom = BoxLayout(size_hint_y=0.1)
+        # 하단 추가/뒤로가기
+        bottom = BoxLayout(size_hint_y=0.1, spacing=5)
         add_b = Button(text="+ 추가", font_name=f)
         add_b.bind(on_release=lambda x: self.add_row(f))
+        back_b = Button(text="뒤로", font_name=f)
+        back_b.bind(on_release=lambda x: setattr(self.manager, 'current', 'char_select'))
+        bottom.add_widget(add_b)
+        bottom.add_widget(back_b)
         right.add_widget(bottom)
+        
         main_layout.add_widget(right)
         self.add_widget(main_layout)
 
@@ -150,16 +164,19 @@ class InventoryScreen(Screen):
 class PT1ManagerApp(App):
     def build(self):
         try:
-            self.icon = BG_IMAGE if os.path.exists(BG_IMAGE) else None
+            # 아이콘 설정
+            if os.path.exists(BG_IMAGE):
+                self.icon = BG_IMAGE
+            
             sm = ScreenManager(transition=FadeTransition())
             sm.add_widget(MainScreen(name='main'))
             sm.add_widget(CharSelectScreen(name='char_select'))
             sm.add_widget(InventoryScreen(name='inventory'))
             return sm
         except Exception:
-            # 오류 발생 시 화면에 에러 표시
+            # 혹시라도 또 에러가 나면 화면에 표시
             err = traceback.format_exc()
-            return Label(text=f"[오류 발생]\n\n{err}", font_size='14sp', color=(1,0,0,1))
+            return Label(text=f"[Critical Error]\n\n{err}", color=(1,0,0,1))
 
 if __name__ == '__main__':
     PT1ManagerApp().run()
