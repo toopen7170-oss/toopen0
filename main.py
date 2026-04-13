@@ -14,12 +14,13 @@ from kivy.graphics import Rectangle, Color
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
 
-# 설정 파일
+# 설정 (배경 이미지 bg.png 및 폰트 설정 유지)
 BG_IMAGE = "bg.png" 
 FONT_NAME = "font.ttf"
 DATA_FILE = "pt1_manager_data.json"
 
 def load_korean_font():
+    """[과제 2 유지] 폰트 안정화"""
     font_path = os.path.join(os.getcwd(), FONT_NAME)
     if os.path.exists(font_path):
         LabelBase.register(name="KoreanFont", fn_regular=font_path)
@@ -27,12 +28,13 @@ def load_korean_font():
     return None
 
 class DataManager:
-    """[과제 6] 데이터 저장 및 로드 로직"""
+    """[과제 6 유지] JSON 데이터 저장/로드"""
     @staticmethod
     def load():
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                try: return json.load(f)
+                except: return {}
         return {}
 
     @staticmethod
@@ -56,7 +58,7 @@ class BackgroundScreen(Screen):
         self.rect.pos = self.pos
         self.rect.size = self.size
 
-# --- 2단계: 계정 관리 화면 ---
+# --- [3단계 핵심 수정] 계정 관리 및 사진 팝업 UI 완벽 구현 ---
 class AccountManagerScreen(BackgroundScreen):
     def on_pre_enter(self):
         self.f = load_korean_font()
@@ -65,26 +67,31 @@ class AccountManagerScreen(BackgroundScreen):
 
     def build_ui(self):
         self.clear_widgets()
-        layout = BoxLayout(orientation='vertical', padding=30, spacing=15)
-        layout.add_widget(Label(text="[2단계] 계정 관리", font_name=self.f, font_size='20sp', size_hint_y=None, height=100))
+        # [2번 사진 반영] 입력 시 입력창이 상단에 위치하도록 spacing 조절
+        layout = BoxLayout(orientation='vertical', padding=[30, 20, 30, 10], spacing=10)
+        
+        # 상단 타이틀
+        layout.add_widget(Label(text="[2단계] 계정 관리 및 팝업 화면", font_name=self.f, font_size='18sp', size_hint_y=None, height=80))
 
-        create_btn = Button(text="+ 새 계정 만들기", font_name=self.f, size_hint_y=None, height=120, background_color=(0.1, 0.5, 0.1, 1))
+        # [+ 새 계정 만들기] 버튼
+        create_btn = Button(text="+ 새 계정 만들기", font_name=self.f, size_hint_y=None, height=120, background_color=(0.3, 0.3, 0.3, 1))
         create_btn.bind(on_release=self.show_create_popup)
         layout.add_widget(create_btn)
 
+        # 계정 목록 스크롤 뷰 (자동 스크롤 최적화 유지)
         scroll = ScrollView(do_scroll_x=False)
         self.grid = GridLayout(cols=1, size_hint_y=None, spacing=10)
         self.grid.bind(minimum_height=self.grid.setter('height'))
         
-        # [수정] 임시 데이터 삭제, 실제 저장된 계정만 표시
+        # 저장된 실제 데이터만 표시
         for acc_id in self.data.keys():
             row = BoxLayout(size_hint_y=None, height=110, spacing=10)
-            # 계정 버튼 (클릭 시 캐릭터 선택으로 이동)
-            acc_btn = Button(text=f" 계정: {acc_id}", font_name=self.f, halign='left', background_color=(0.2, 0.2, 0.3, 1))
+            # 계정 버튼
+            acc_btn = Button(text=f" 계정: {acc_id}", font_name=self.f, halign='left', background_color=(0.1, 0.1, 0.2, 1))
             acc_btn.bind(on_release=lambda x, a=acc_id: self.go_to_chars(a))
             row.add_widget(acc_btn)
-            
-            del_btn = Button(text="삭제", font_name=self.f, size_hint_x=0.25, background_color=(0.7, 0.1, 0.1, 1))
+            # 삭제 버튼
+            del_btn = Button(text="삭제", font_name=self.f, size_hint_x=0.25, background_color=(0.6, 0.1, 0.1, 1))
             del_btn.bind(on_release=lambda x, a=acc_id: self.show_delete_popup(a))
             row.add_widget(del_btn)
             self.grid.add_widget(row)
@@ -98,36 +105,48 @@ class AccountManagerScreen(BackgroundScreen):
         self.manager.current = 'char_select'
 
     def show_create_popup(self, *args):
-        content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        # [수정] 입력창 글씨 크기 키움 (18sp -> 22sp)
-        self.id_input = TextInput(hint_text="ID 입력", font_name=self.f, multiline=False, font_size='22sp', size_hint_y=None, height=120)
+        # [1번 사진 완벽 구현] 팝업창 스타일 및 배치 수정
+        # 취소 버튼 없이 '생성 완료' 버튼 1개만 하단에 가로로 꽉 차게 배치
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        
+        # [과제 2 피드백] 한글 깨짐 방지를 위해 제목 Label에 폰트 적용
+        content.add_widget(Label(text="[toopen] 계정 생성", font_name=self.f, size_hint_y=None, height=60))
+
+        # 입력창 (글씨 크기는 키우지 않고 기본으로 유지)
+        self.id_input = TextInput(hint_text="생성할 계정 ID 입력", font_name=self.f, multiline=False, size_hint_y=0.4, font_size='18sp')
         content.add_widget(self.id_input)
         
-        btns = BoxLayout(size_hint_y=None, height=100, spacing=10)
-        create_b = Button(text="확인", font_name=self.f); cancel_b = Button(text="취소", font_name=self.f)
-        btns.add_widget(cancel_b); btns.add_widget(create_b)
-        content.add_widget(btns)
+        # [1번 사진 반영] 하단 전체를 차지하는 초록색 '생성 완료' 버튼
+        create_b = Button(text="생성 완료", font_name=self.f, size_hint_y=0.25, background_color=(0.1, 0.5, 0.1, 1))
+        content.add_widget(create_b)
         
-        popup = Popup(title="계정 생성", title_font=self.f, content=content, size_hint=(0.8, 0.4))
+        # [1번 사진 반영] 아주 큰 크기의 정사각형 팝업 (size_hint 수정)
+        popup = Popup(title="계정 생성", title_font=self.f, content=content, size_hint=(0.85, 0.85), auto_dismiss=True)
+        
+        # 버튼 기능 연결
         create_b.bind(on_release=lambda x: self.create_acc(self.id_input.text, popup))
-        cancel_b.bind(on_release=popup.dismiss); popup.open()
+        popup.open()
 
     def create_acc(self, acc_id, popup):
         if acc_id and acc_id not in self.data:
+            # 3단계 데이터 구조 기초 구축
             self.data[acc_id] = {"chars": {f"char_{i}": {"name": f"캐릭터 {i}"} for i in range(1, 7)}}
             DataManager.save(self.data)
             self.on_pre_enter()
         popup.dismiss()
 
     def show_delete_popup(self, acc_id):
-        content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        content.add_widget(Label(text=f"'{acc_id}' 를 삭제할까요?", font_name=self.f, halign='center'))
+        # 삭제 확인 팝업 (사진 팝업 디자인 통합)
+        content = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        content.add_widget(Label(text=f"'{acc_id}' 를\n삭제할까요?", font_name=self.f, halign='center'))
+        
         btns = BoxLayout(size_hint_y=None, height=100, spacing=10)
-        confirm_b = Button(text="삭제", font_name=self.f, background_color=(0.7, 0.1, 0.1, 1))
         cancel_b = Button(text="취소", font_name=self.f)
+        confirm_b = Button(text="삭제", font_name=self.f, background_color=(0.7, 0.1, 0.1, 1))
         btns.add_widget(cancel_b); btns.add_widget(confirm_b)
         content.add_widget(btns)
-        popup = Popup(title="삭제 확인", title_font=self.f, content=content, size_hint=(0.7, 0.35))
+        
+        popup = Popup(title="삭제 확인", title_font=self.f, content=content, size_hint=(0.8, 0.4))
         confirm_b.bind(on_release=lambda x: self.del_acc(acc_id, popup))
         cancel_b.bind(on_release=popup.dismiss); popup.open()
 
@@ -138,7 +157,7 @@ class AccountManagerScreen(BackgroundScreen):
             self.on_pre_enter()
         popup.dismiss()
 
-# --- 3단계: 캐릭터 선택 화면 (사진 구성 반영) ---
+# --- 3단계: 캐릭터 선택 화면 (사진 구성 반영 유지) ---
 class CharacterSelectScreen(BackgroundScreen):
     def on_pre_enter(self):
         self.f = load_korean_font()
@@ -150,15 +169,14 @@ class CharacterSelectScreen(BackgroundScreen):
         self.clear_widgets()
         layout = BoxLayout(orientation='vertical', padding=30, spacing=15)
         acc_id = self.app.current_account
-        layout.add_widget(Label(text=f"[{acc_id}] 캐릭터 선택", font_name=self.f, font_size='22sp', size_hint_y=None, height=100))
+        layout.add_widget(Label(text=f"[{acc_id}] 캐릭터 선택", font_name=self.f, font_size='20sp', size_hint_y=None, height=100))
 
-        # 캐릭터 6개 그리드 (사진과 동일한 구성)
+        # 캐릭터 6개 그리드 (사진과 동일한 구성 유지)
         grid = GridLayout(cols=2, spacing=15)
         chars = self.data[acc_id]["chars"]
         for i in range(1, 7):
             char_data = chars.get(f"char_{i}", {"name": "빈 슬롯"})
-            btn = Button(text=char_data["name"], font_name=self.f, background_color=(0.1, 0.15, 0.25, 1))
-            btn.bind(on_release=lambda x, idx=i: self.select_char(idx))
+            btn = Button(text=char_data["name"], font_name=self.f, background_color=(0.1, 0.1, 0.2, 1))
             grid.add_widget(btn)
         
         layout.add_widget(grid)
@@ -167,14 +185,12 @@ class CharacterSelectScreen(BackgroundScreen):
         layout.add_widget(back_btn)
         self.add_widget(layout)
 
-    def select_char(self, idx):
-        # 캐릭터 선택 로직 (다음 단계 세부화면 연결)
-        print(f"{idx}번 캐릭터 선택됨")
-
 class PT1App(App):
     current_account = ""
     def build(self):
-        Window.softinput_mode = "below_target"
+        # [2번 사진 반영] 입력 시 입력창이 상단에 위치하도록 softinput_mode 수정
+        # "pan" 모드는 키보드가 올라올 때 전체 화면을 위로 밀어 올림
+        Window.softinput_mode = "pan"
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(AccountManagerScreen(name='account_manager'))
         sm.add_widget(CharacterSelectScreen(name='char_select'))
