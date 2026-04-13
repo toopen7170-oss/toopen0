@@ -14,20 +14,21 @@ from kivy.uix.scrollview import ScrollView
 from kivy.uix.image import AsyncImage
 from kivy.graphics import Rectangle, Color
 from kivy.core.text import LabelBase
+from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.cache import Cache
 
-# 안드로이드 네이티브 브릿지
+# 안드로이드 네이티브 브릿지 (Termux 절대 금지 원칙 준수)
 if platform == 'android':
     from android.permissions import request_permissions, Permission, check_permission
     from android import activity
     from jnius import autoclass
 
-# --- 설정 및 전역 변수 ---
+# --- 설정 및 경로 ---
 FONT_PATH = "font.ttf"
 BG_IMAGE = "bg.png"
-DB_NAME = "pt1_master_v28.json"
+DB_VERSION = "v31_master"
 
 class DataManager:
     @staticmethod
@@ -35,8 +36,8 @@ class DataManager:
         if platform == 'android':
             base_dir = App.get_running_app().user_data_dir
             os.makedirs(base_dir, exist_ok=True)
-            return os.path.join(base_dir, DB_NAME)
-        return DB_NAME
+            return os.path.join(base_dir, f"pt1_data_{DB_VERSION}.json")
+        return f"pt1_data_{DB_VERSION}.json"
 
     @staticmethod
     def load():
@@ -45,9 +46,8 @@ class DataManager:
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
-                    if isinstance(data, dict) and "accounts" in data:
-                        return data
-            except: pass
+                    return data if isinstance(data, dict) and "accounts" in data else {"accounts": {}}
+            except: return {"accounts": {}}
         return {"accounts": {}}
 
     @staticmethod
@@ -70,7 +70,7 @@ class BaseScreen(Screen):
             if os.path.exists(BG_IMAGE):
                 self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
             else:
-                Color(0.01, 0.02, 0.05, 1)
+                Color(0, 0.01, 0.02, 1) # OLED 블랙 최적화
                 self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
     def update_rect(self, *args):
@@ -84,8 +84,8 @@ class AccountScreen(BaseScreen):
         self.clear_widgets()
         layout = BoxLayout(orientation='vertical', padding=[30, 80, 30, 30], spacing=20)
         search_box = BoxLayout(size_hint_y=None, height=120, spacing=10)
-        self.search_in = TextInput(text=search_text, hint_text="계정 ID 검색...", multiline=False)
-        s_btn = Button(text="검색", size_hint_x=0.25, background_color=(0.1, 0.5, 0.9, 1))
+        self.search_in = TextInput(text=search_text, hint_text="계정 검색...", multiline=False, font_name="KFont" if os.path.exists(FONT_PATH) else None)
+        s_btn = Button(text="찾기", size_hint_x=0.25, background_color=(0.1, 0.5, 0.9, 1))
         s_btn.bind(on_release=lambda x: self.render_ui(self.search_in.text))
         search_box.add_widget(self.search_in); search_box.add_widget(s_btn); layout.add_widget(search_box)
         layout.add_widget(Button(text="+ 계정 추가", size_hint_y=None, height=140, background_color=(0.1, 0.7, 0.3, 1), on_release=self.popup_add_acc))
@@ -105,7 +105,7 @@ class AccountScreen(BaseScreen):
     def popup_add_acc(self, *args):
         c = BoxLayout(orientation='vertical', padding=25, spacing=20)
         inp = TextInput(hint_text="ID 입력", multiline=False, size_hint_y=None, height=120)
-        b = Button(text="완료", size_hint_y=None, height=120, background_color=(0.2, 0.6, 0.4, 1))
+        b = Button(text="등록", size_hint_y=None, height=120, background_color=(0.2, 0.6, 0.4, 1))
         p = Popup(title="계정 추가", content=c, size_hint=(0.9, 0.4))
         b.bind(on_release=lambda x: self.add_acc(inp.text, p)); c.add_widget(inp); c.add_widget(b); p.open()
     def add_acc(self, acc_id, p):
@@ -131,16 +131,15 @@ class CharSelectScreen(BaseScreen):
             btn = Button(text=f"SLOT {i}\n{char_info['name']}", halign='center')
             btn.bind(on_release=lambda x, idx=i: self.go_detail(str(idx))); grid.add_widget(btn)
         layout.add_widget(grid)
-        layout.add_widget(Button(text="메인 화면", size_hint_y=None, height=130, on_release=lambda x: setattr(self.manager, 'current', 'account_main')))
+        layout.add_widget(Button(text="메인으로", size_hint_y=None, height=130, on_release=lambda x: setattr(self.manager, 'current', 'account_main')))
         self.add_widget(layout)
     def go_detail(self, idx): App.get_running_app().cur_char = idx; self.manager.current = 'char_detail'
 
 class CharDetailScreen(BaseScreen):
     def on_pre_enter(self):
         self.app = App.get_running_app(); self.data = DataManager.load()
-        # 데이터 복구 안정성 보강 (Line-by-line 수정)
         acc_data = self.data["accounts"].get(self.app.cur_acc, {})
-        self.char_data = acc_data.get(self.app.cur_char, {"name": "Unknown", "photos": []})
+        self.char_data = acc_data.get(self.app.cur_char, {"name": "Empty", "photos": []})
         self.render_ui()
     def render_ui(self):
         self.clear_widgets(); layout = BoxLayout(orientation='vertical', padding=15)
@@ -184,18 +183,23 @@ class CharDetailScreen(BaseScreen):
             act.startActivityForResult(intent, 101)
     def save_all(self, *args):
         self.char_data['name'] = self.name_in.text; DataManager.save(self.data)
-        Popup(title="알림", content=Label(text="저장되었습니다."), size_hint=(0.6, 0.3)).open()
+        Popup(title="성공", content=Label(text="저장 완료"), size_hint=(0.6, 0.3)).open()
 
 class PTManagerApp(App):
-    # 앱 상태 보존용 변수 (Line-by-line 수정)
     cur_acc = ""
     cur_char = ""
 
     def build(self):
         self.title = "PT1 Manager Master"
+        # 폰트 오류 수정 (Line-by-line 강화)
         if os.path.exists(FONT_PATH):
-            try: LabelBase.register(name="KFont", fn_regular=FONT_PATH)
-            except: pass
+            try: 
+                LabelBase.register(name="KFont", fn_regular=FONT_PATH)
+                # Kivy 기본 폰트를 사용자 폰트로 강제 대체
+                LabelBase.register(name="Roboto", fn_regular=FONT_PATH)
+            except Exception as e:
+                print(f"Font Load Error: {e}")
+        
         if platform == 'android': activity.bind(on_activity_result=self.on_gallery_result)
         sm = ScreenManager(transition=FadeTransition(duration=0.2))
         sm.add_widget(AccountScreen(name='account_main')); sm.add_widget(CharSelectScreen(name='char_select')); sm.add_widget(CharDetailScreen(name='char_detail'))
@@ -203,19 +207,21 @@ class PTManagerApp(App):
     def on_gallery_result(self, request_code, result_code, intent):
         if request_code == 101 and result_code == -1 and intent:
             uri = intent.getData()
-            if platform == 'android':
-                try:
-                    act = autoclass('org.kivy.android.PythonActivity').mActivity
-                    takeFlags = intent.getFlags() & (autoclass('android.content.Intent').FLAG_GRANT_READ_URI_PERMISSION)
-                    act.getContentResolver().takePersistableUriPermission(uri, takeFlags)
-                except: pass
-            path = uri.toString()
-            if self.root.current == 'char_detail':
-                Clock.schedule_once(lambda dt: self.update_char_photos(path))
+            if uri:
+                path = uri.toString()
+                if platform == 'android':
+                    try:
+                        act = autoclass('org.kivy.android.PythonActivity').mActivity
+                        takeFlags = intent.getFlags() & (autoclass('android.content.Intent').FLAG_GRANT_READ_URI_PERMISSION)
+                        act.getContentResolver().takePersistableUriPermission(uri, takeFlags)
+                    except: pass
+                if self.root.current == 'char_detail':
+                    Clock.schedule_once(lambda dt: self.update_char_photos(path))
     def update_char_photos(self, path):
         screen = self.root.current_screen
         if path not in screen.char_data.setdefault("photos", []):
             screen.char_data["photos"].append(path); screen.draw_photos()
+            DataManager.save(screen.data)
     def on_pause(self): 
         Cache.remove('kv.image'); Cache.remove('kv.texture')
         return True
