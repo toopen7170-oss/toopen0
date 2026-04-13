@@ -1,52 +1,63 @@
 [app]
-# (section) 앱 기본 정보
-title = PRISTON TALE MANAGER
+
+# (str) 앱 제목
+title = PT1 Manager
+
+# (str) 패키지 명
 package.name = pt1manager
+
+# (str) 패키지 도메인
 package.domain = org.toopen
 
-# 🎯 에러 해결: 앱 버전 정보를 명시합니다.
-version = 1.1
-
-# (section) 소스 코드 및 포함 파일 설정
-# png, jpg, jpeg, ttf, json 파일을 모두 포함합니다.
+# (str) 소스 코드 위치
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,json
-source.include_patterns = assets/*,images/*
 
-# (section) 앱 아이콘 설정
-# 점주님의 단풍 아이콘(icon.png)을 적용합니다.
-icon.filename = icon.png
+# (list) 포함할 파일 확장자 (한글 폰트 ttf 및 데이터 json 필수 포함)
+source.include_exts = py,png,jpg,kv,atlas,ttf,json
 
-# (section) 화면 방향 및 요구 사양
+# (str) 앱 버전
+version = 1.0.0
+
+# (list) 필수 라이브러리 (최신 Kivy 버전 고정 및 최적화)
+requirements = python3,kivy==2.3.0,pillow
+
+# (str) 화면 방향 (세로 모드 고정)
 orientation = portrait
-osx.python_version = 3
-osx.kivy_version = 2.1.0
 
-# (section) 필수 라이브러리 (이미지 처리를 위해 pillow 필수)
-requirements = python3,kivy==2.1.0,pillow
+# (list) 안드로이드 권한 (사진 접근 및 저장소)
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, MANAGE_EXTERNAL_STORAGE, INTERNET
 
-# (section) 안드로이드 전용 설정
-fullscreen = 1
-android.archs = arm64-v8a, armeabi-v7a
-android.allow_backup = True
+# (int) 타겟 API 레벨 (갤럭시 S26 울트라 안드로이드 14 대응)
+android.api = 34
 
-# 🎯 사진첩 접근 및 저장 권한 (사진 안 보이는 문제 해결)
-android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, CAMERA, INTERNET, MANAGE_EXTERNAL_STORAGE
-
-# (section) 안드로이드 API 수준 (최신 폰 대응)
-android.api = 33
+# (int) 최소 지원 API
 android.minapi = 21
-android.sdk = 33
+
+# (str) NDK 버전 (안정적인 25b 버전 추천)
 android.ndk = 25b
 
-# (section) 빌드 최적화 및 라이선스 동의
-android.skip_update = False
-android.accept_sdk_license = True
+# (bool) 내부 저장소 사용 여부
+android.private_storage = True
 
-# (section) 로그 출력 설정
-log_level = 2
-warn_on_root = 1
+# (str) 엔트리 포인트
+android.entrypoint = org.kivy.android.PythonActivity
+
+# (list) 빌드 제외 확장자
+android.exclude_exts = spec
+
+# (str) CPU 아키텍처 (S26 울트라 최적화: 64비트 전용)
+android.archs = arm64-v8a
+
+# (bool) 자동 백업 허용
+android.allow_backup = True
 
 [buildozer]
+
+# (int) 로그 레벨 (오류 추적을 위해 2로 설정)
 log_level = 2
+
+# (int) 루트 실행 경고
 warn_on_root = 1
+
+# (str) 결과물 저장 경로
+# bin_dir = ./bin
