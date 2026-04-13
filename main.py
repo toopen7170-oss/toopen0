@@ -1,6 +1,5 @@
 import os
 import json
-import traceback
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -10,6 +9,7 @@ from kivy.uix.button import Button
 from kivy.uix.textinput import TextInput
 from kivy.uix.popup import Popup
 from kivy.uix.scrollview import ScrollView
+from kivy.uix.image import Image
 from kivy.graphics import Rectangle, Color
 from kivy.core.text import LabelBase
 from kivy.core.window import Window
@@ -17,6 +17,7 @@ from kivy.core.window import Window
 # 설정 리소스
 BG_IMAGE = "bg.png" 
 FONT_NAME = "font.ttf"
+CHAR_ICON = "images.jpeg" 
 DATA_FILE = "pt1_manager_data.json"
 
 def load_korean_font():
@@ -55,17 +56,7 @@ class BackgroundScreen(Screen):
         self.rect.pos = self.pos
         self.rect.size = self.size
 
-# --- [수정] 모든 팝업에 "사진 1번"의 슬림한 디자인 적용 ---
-class SlimPopup(Popup):
-    def __init__(self, p_title, p_content, p_size=(0.75, 0.35), **kwargs):
-        super().__init__(**kwargs)
-        self.title = p_title
-        self.title_font = load_korean_font()
-        self.content = p_content
-        self.size_hint = p_size
-        self.auto_dismiss = False
-
-# --- 2/3단계: 계정 관리 화면 ---
+# --- 계정 관리 화면 ---
 class AccountManagerScreen(BackgroundScreen):
     def on_pre_enter(self):
         self.f = load_korean_font()
@@ -74,20 +65,20 @@ class AccountManagerScreen(BackgroundScreen):
 
     def build_ui(self):
         self.clear_widgets()
-        layout = BoxLayout(orientation='vertical', padding=30, spacing=15)
-        layout.add_widget(Label(text="[PT1 매니저] 계정 선택", font_name=self.f, font_size='20sp', size_hint_y=None, height=100))
+        layout = BoxLayout(orientation='vertical', padding=[30, 20, 30, 10], spacing=10)
+        layout.add_widget(Label(text="[PT1 매니저] 계정 목록", font_name=self.f, font_size='20sp', size_hint_y=None, height=100))
 
         create_btn = Button(text="+ 새 계정 등록", font_name=self.f, size_hint_y=None, height=120, background_color=(0.1, 0.5, 0.1, 1))
         create_btn.bind(on_release=self.show_create_popup)
         layout.add_widget(create_btn)
 
-        scroll = ScrollView()
+        scroll = ScrollView(do_scroll_x=False)
         self.grid = GridLayout(cols=1, size_hint_y=None, spacing=10)
         self.grid.bind(minimum_height=self.grid.setter('height'))
         
         for acc_id in self.data.keys():
             row = BoxLayout(size_hint_y=None, height=110, spacing=10)
-            acc_btn = Button(text=f" {acc_id}", font_name=self.f, halign='left', background_color=(0.2, 0.2, 0.3, 1))
+            acc_btn = Button(text=f" 계정: {acc_id}", font_name=self.f, halign='left', background_color=(0.2, 0.2, 0.3, 1))
             acc_btn.bind(on_release=lambda x, a=acc_id: self.go_to_chars(a))
             row.add_widget(acc_btn)
             
@@ -105,40 +96,47 @@ class AccountManagerScreen(BackgroundScreen):
         self.manager.current = 'char_select'
 
     def show_create_popup(self, *args):
-        # [사진 1번 반영] 슬림한 입력창 디자인
-        content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        content.add_widget(Label(text="계정 ID를 입력하세요", font_name=self.f, size_hint_y=None, height=40))
+        # [수정] 크기는 화면의 1/3 정도로 슬림하게, 디자인은 짙은 녹색 테마
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
         
-        # [핵심] 입력칸 높이를 슬림하게(80) 조정
-        self.id_input = TextInput(hint_text="ID 입력", font_name=self.f, multiline=False, font_size='18sp', size_hint_y=None, height=90)
+        with content.canvas.before:
+            Color(0.05, 0.2, 0.1, 1) # 짙은 녹색 배경
+            self.rect_p = Rectangle(pos=content.pos, size=content.size)
+        content.bind(pos=lambda ins, val: setattr(self.rect_p, 'pos', ins.pos),
+                     size=lambda ins, val: setattr(self.rect_p, 'size', ins.size))
+
+        content.add_widget(Label(text="[toopen] 계정 생성", font_name=self.f, size_hint_y=None, height=40, font_size='16sp'))
+
+        # 입력창 높이를 슬림하게 조절
+        self.id_input = TextInput(hint_text="ID 입력", font_name=self.f, multiline=False, size_hint_y=None, height=100, font_size='18sp')
         content.add_widget(self.id_input)
         
-        btns = BoxLayout(size_hint_y=None, height=90, spacing=10)
-        ok_b = Button(text="등록", font_name=self.f); cancel_b = Button(text="취소", font_name=self.f)
-        btns.add_widget(cancel_b); btns.add_widget(ok_b)
-        content.add_widget(btns)
+        # 하단 초록색 생성 완료 버튼
+        create_b = Button(text="생성 완료", font_name=self.f, size_hint_y=None, height=100, background_color=(0.1, 0.6, 0.2, 1))
+        content.add_widget(create_b)
         
-        popup = SlimPopup("계정 생성", content)
-        ok_b.bind(on_release=lambda x: self.create_acc(self.id_input.text, popup))
-        cancel_b.bind(on_release=popup.dismiss); popup.open()
+        # [수정] 팝업 크기를 화면의 1/3 (0.35) 수준으로 설정
+        popup = Popup(title="계정 생성", title_font=self.f, content=content, size_hint=(0.8, 0.35), auto_dismiss=True)
+        
+        create_b.bind(on_release=lambda x: self.create_acc(self.id_input.text, popup))
+        popup.open()
 
     def create_acc(self, acc_id, popup):
         if acc_id and acc_id not in self.data:
-            # 4단계용 상세 데이터 구조 (레벨, 직업 추가)
-            self.data[acc_id] = {"chars": {f"{i}": {"name": f"캐릭터 {i}", "lv": "1", "job": "없음"} for i in range(1, 7)}}
+            self.data[acc_id] = {"chars": {f"{i}": {"name": f"캐릭터 {i}", "lv": "1", "icon": CHAR_ICON} for i in range(1, 7)}}
             DataManager.save(self.data)
             self.on_pre_enter()
         popup.dismiss()
 
     def show_delete_popup(self, acc_id):
-        content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        content.add_widget(Label(text=f"'{acc_id}'\n정말 삭제할까요?", font_name=self.f, halign='center'))
+        content = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        content.add_widget(Label(text=f"'{acc_id}' 를 삭제할까요?", font_name=self.f, halign='center'))
         btns = BoxLayout(size_hint_y=None, height=90, spacing=10)
         confirm_b = Button(text="삭제", font_name=self.f, background_color=(0.7, 0.1, 0.1, 1))
         cancel_b = Button(text="취소", font_name=self.f)
         btns.add_widget(cancel_b); btns.add_widget(confirm_b)
         content.add_widget(btns)
-        popup = SlimPopup("삭제 확인", content, p_size=(0.7, 0.3))
+        popup = Popup(title="삭제 확인", title_font=self.f, content=content, size_hint=(0.7, 0.3))
         confirm_b.bind(on_release=lambda x: self.del_acc(acc_id, popup))
         cancel_b.bind(on_release=popup.dismiss); popup.open()
 
@@ -149,7 +147,7 @@ class AccountManagerScreen(BackgroundScreen):
             self.on_pre_enter()
         popup.dismiss()
 
-# --- 4단계: 캐릭터 선택 및 상세 정보 확인 ---
+# --- 캐릭터 선택 화면 (아이콘 연동) ---
 class CharacterSelectScreen(BackgroundScreen):
     def on_pre_enter(self):
         self.f = load_korean_font()
@@ -161,32 +159,42 @@ class CharacterSelectScreen(BackgroundScreen):
         self.clear_widgets()
         layout = BoxLayout(orientation='vertical', padding=30, spacing=15)
         acc_id = self.app.current_account
-        layout.add_widget(Label(text=f"<{acc_id}> 캐릭터 목록", font_name=self.f, font_size='22sp', size_hint_y=None, height=100))
+        layout.add_widget(Label(text=f"[{acc_id}] 캐릭터 선택", font_name=self.f, font_size='22sp', size_hint_y=None, height=100))
 
         grid = GridLayout(cols=2, spacing=15)
         chars = self.data[acc_id]["chars"]
         for i in range(1, 7):
-            char_info = chars.get(str(i), {"name": "빈 슬롯", "lv": "-"})
-            # 버튼에 이름과 레벨 표시
-            btn_text = f"{char_info['name']}\n(Lv.{char_info['lv']})"
-            btn = Button(text=btn_text, font_name=self.f, background_color=(0.1, 0.15, 0.25, 1), halign='center')
+            char_info = chars.get(str(i), {"name": "빈 슬롯", "lv": "1", "icon": CHAR_ICON})
+            
+            btn_layout = BoxLayout(orientation='vertical', padding=10, spacing=5)
+            # 아이콘 이미지 표시
+            if os.path.exists(char_info['icon']):
+                icon = Image(source=char_info['icon'], size_hint_y=0.7)
+                btn_layout.add_widget(icon)
+            else:
+                btn_layout.add_widget(Label(text="[NO IMG]", size_hint_y=0.7))
+
+            text_label = Label(text=f"{char_info['name']}\n(Lv.{char_info['lv']})", font_name=self.f, halign='center', size_hint_y=0.3, font_size='14sp')
+            btn_layout.add_widget(text_label)
+
+            btn = Button(background_color=(0.1, 0.1, 0.2, 1))
+            btn.add_widget(btn_layout) 
             btn.bind(on_release=lambda x, idx=i: self.view_char_detail(idx))
             grid.add_widget(btn)
         
         layout.add_widget(grid)
-        back_btn = Button(text="뒤로가기", font_name=self.f, size_hint_y=None, height=110, background_color=(0.4, 0.4, 0.4, 1))
+        back_btn = Button(text="뒤로가기", font_name=self.f, size_hint_y=None, height=120)
         back_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'account_manager'))
         layout.add_widget(back_btn)
         self.add_widget(layout)
 
     def view_char_detail(self, idx):
-        # 캐릭터 상세 보기 (나중에 인벤토리로 연결)
         print(f"{idx}번 캐릭터 상세 화면 진입 예정")
 
 class PT1App(App):
     current_account = ""
     def build(self):
-        Window.softinput_mode = "pan" # 2번 사진처럼 입력창 상단 고정
+        Window.softinput_mode = "pan" 
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(AccountManagerScreen(name='account_manager'))
         sm.add_widget(CharacterSelectScreen(name='char_select'))
