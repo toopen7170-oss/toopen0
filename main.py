@@ -1,161 +1,75 @@
-import os
-import json
-import traceback
-from kivy.app import App
-from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.button import Button
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.scrollview import ScrollView
-from kivy.graphics import Rectangle, Color
-from kivy.core.window import Window
+# ... (기본 설정 및 DataManager 클래스는 이전과 동일) ...
 
-# [과제 1 해결] 저장소 파일명과 대소문자 일치 (소문자 images.jpeg)
-BG_IMAGE = 'images.jpeg' 
-FONT_FILE = 'font.ttf'
-
-def safe_font():
-    """[과제 2 해결] 한글 깨짐 방지를 위한 폰트 탐색 로직"""
-    paths = [
-        os.path.join(os.getcwd(), FONT_FILE),
-        FONT_FILE,
-        "/sdcard/Download/font.ttf"
-    ]
-    for p in paths:
-        if os.path.exists(p):
-            return p
-    return None
-
-class BackgroundScreen(Screen):
-    """배경 이미지를 공통으로 적용하는 클래스"""
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        with self.canvas.before:
-            if os.path.exists(BG_IMAGE):
-                self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
-            else:
-                Color(0.15, 0.15, 0.15, 1) # 이미지 없을 시 어두운 배경
-                self.rect = Rectangle(pos=self.pos, size=self.size)
-        self.bind(pos=self.update_rect, size=self.update_rect)
-
-    def update_rect(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
-
-# --- [과제 3 해결] 캐릭터 세부 정보 화면 (화면 분리) ---
-class CharDetailScreen(BackgroundScreen):
+class CharacterSelectScreen(BackgroundScreen):
+    """[toopen] 캐릭터 선택 화면 구현 (4단계로 가기 전 필수 관문)"""
     def on_pre_enter(self):
+        self.data = DataManager.load()
         self.build_ui()
 
     def build_ui(self):
         self.clear_widgets()
         f = safe_font()
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
+        layout = BoxLayout(orientation='vertical', padding=30, spacing=20)
         
-        # 상단 이름 영역
-        top = BoxLayout(size_hint_y=None, height=120, spacing=10)
-        top.add_widget(Label(text="캐릭터명:", font_name=f, size_hint_x=0.3, font_size='18sp'))
-        self.name_input = TextInput(text="기본 캐릭터", font_name=f, multiline=False, font_size='18sp')
-        top.add_widget(self.name_input)
-        layout.add_widget(top)
+        # 상단 타이틀: [계정명] 캐릭터 선택
+        account_name = self.data.get("account_id", "toopen")
+        title = Label(
+            text=f"[{account_name}] 캐릭터 선택", 
+            font_name=f, 
+            size_hint_y=None, 
+            height=150, 
+            font_size='24sp'
+        )
+        layout.add_widget(title)
 
-        # 중앙: 장비 카테고리 12종 리스트 (스크롤 적용)
-        scroll = ScrollView()
-        grid = GridLayout(cols=1, size_hint_y=None, spacing=8)
-        grid.bind(minimum_height=grid.setter('height'))
+        # 캐릭터 6개 그리드 배치 (사진과 동일한 2열 구성)
+        grid = GridLayout(cols=2, spacing=15, padding=10)
         
-        categories = ["직업", "레벨", "양손무기", "한손무기", "갑옷", "로브", "방패", "암릿", "장갑", "부츠", "아뮬렛", "링", "쉘텀"]
-        for cat in categories:
-            row = BoxLayout(size_hint_y=None, height=110, spacing=10)
-            # 버튼마다 고유 색상 느낌 부여
-            btn = Button(text=cat, font_name=f, size_hint_x=0.3, background_color=(0.2, 0.5, 0.7, 1))
-            row.add_widget(btn)
-            row.add_widget(TextInput(hint_text=f"{cat} 정보 입력", font_name=f))
-            grid.add_widget(row)
-        
-        scroll.add_widget(grid)
-        layout.add_widget(scroll)
-
-        # 하단 버튼: 인벤토리 이동 및 저장
-        btns = BoxLayout(size_hint_y=None, height=140, spacing=10)
-        inv_btn = Button(text="인벤토리 열기", font_name=f, background_color=(0.9, 0.5, 0.1, 1))
-        inv_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'inventory'))
-        
-        save_btn = Button(text="정보 저장", font_name=f, background_color=(0.1, 0.7, 0.3, 1))
-        
-        btns.add_widget(inv_btn)
-        btns.add_widget(save_btn)
-        layout.add_widget(btns)
-        
-        self.add_widget(layout)
-
-# --- [과제 3 해결] 인벤토리 화면 (별도 분리) ---
-class InventoryScreen(BackgroundScreen):
-    def on_pre_enter(self):
-        self.build_ui()
-
-    def build_ui(self):
-        self.clear_widgets()
-        f = safe_font()
-        layout = BoxLayout(orientation='vertical', padding=20, spacing=10)
-        
-        layout.add_widget(Label(text="[ 캐릭터 인벤토리 ]", font_name=f, size_hint_y=None, height=80, font_size='22sp'))
-
-        # 무한 아이템 리스트 영역
-        self.scroll_view = ScrollView()
-        self.item_list = GridLayout(cols=1, size_hint_y=None, spacing=5)
-        self.item_list.bind(minimum_height=self.item_list.setter('height'))
-        
-        # 초기 입력창 5개 생성
-        for _ in range(5): self.add_item_row()
+        # 1번부터 6번 캐릭터 버튼 생성
+        for i in range(1, 7):
+            char_key = f"char_{i}_name"
+            # 저장된 이름이 있으면 표시, 없으면 'n번 캐릭터'로 표시
+            display_name = self.data.get(char_key, f"{i}번 캐릭터")
             
-        self.scroll_view.add_widget(self.item_list)
-        layout.add_widget(self.scroll_view)
+            btn = Button(
+                text=display_name,
+                font_name=f,
+                background_normal='', # 배경색 적용을 위해 초기화
+                background_color=(0.1, 0.15, 0.2, 0.9), # 어두운 네이비 톤 (사진 느낌)
+                font_size='18sp'
+            )
+            # 버튼 클릭 시 해당 캐릭터의 세부 정보 화면으로 이동 (캐릭터 번호 전달)
+            btn.bind(on_release=lambda x, idx=i: self.select_character(idx))
+            grid.add_widget(btn)
+            
+        layout.add_widget(grid)
 
-        # 하단 버튼부
-        btns = BoxLayout(size_hint_y=None, height=130, spacing=10)
-        add_btn = Button(text="+ 줄 추가", font_name=f, background_color=(0.1, 0.6, 0.9, 1))
-        add_btn.bind(on_release=lambda x: self.add_item_row())
-        
-        back_btn = Button(text="뒤로 (세부내용)", font_name=f, background_color=(0.4, 0.4, 0.4, 1))
-        back_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'detail'))
-        
-        btns.add_widget(add_btn)
-        btns.add_widget(back_btn)
-        layout.add_widget(btns)
+        # 하단 취소/뒤로가기 버튼
+        bottom_btn = Button(
+            text="취소", 
+            font_name=f, 
+            size_hint_y=None, 
+            height=120,
+            background_color=(0.3, 0.3, 0.3, 1)
+        )
+        bottom_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'account_manager'))
+        layout.add_widget(bottom_btn)
 
         self.add_widget(layout)
 
-    def add_item_row(self):
-        f = safe_font()
-        row = BoxLayout(size_hint_y=None, height=120, spacing=5)
-        row.add_widget(TextInput(hint_text="아이템 정보...", font_name=f))
-        del_btn = Button(text="삭제", font_name=f, size_hint_x=0.2, background_color=(0.8, 0.1, 0.1, 1))
-        del_btn.bind(on_release=lambda x: self.item_list.remove_widget(row))
-        row.add_widget(del_btn)
-        self.item_list.add_widget(row)
+    def select_character(self, index):
+        # 현재 선택된 캐릭터 번호를 임시 저장하고 세부 화면으로 이동
+        self.app = App.get_running_app()
+        self.app.selected_char_index = index 
+        self.manager.current = 'detail'
 
+# App 클래스의 build 부분에 화면 등록 추가
 class PT1App(App):
-    def build(self):
-        try:
-            # [자동 스크롤] 입력 시 키보드가 글자를 가리지 않게 설정
-            Window.softinput_mode = "below_target"
-            
-            sm = ScreenManager(transition=FadeTransition())
-            
-            # 화면 등록
-            sm.add_widget(CharDetailScreen(name='detail'))
-            sm.add_widget(InventoryScreen(name='inventory'))
-            
-            # [시작 화면 설정] 세부 정보 화면을 먼저 띄움
-            sm.current = 'detail'
-            
-            return sm
-        except Exception:
-            # 에러 발생 시 빨간 글씨로 로그 출력
-            return Label(text=traceback.format_exc(), color=(1,0,0,1))
+    selected_char_index = 1 # 기본값
 
-if __name__ == '__main__':
-    PT1App().run()
+    def build(self):
+        sm = ScreenManager(transition=FadeTransition())
+        # ... 다른 화면들 ...
+        sm.add_widget(CharacterSelectScreen(name='char_select'))
+        sm.add_widget(CharDetailScreen(name='detail'))
+        return sm
