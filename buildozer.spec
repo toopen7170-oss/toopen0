@@ -4,7 +4,7 @@ package.name = ptmanager
 package.domain = org.toopen
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttf,json
-version = 2.8.0
+version = 3.1.0
 
 requirements = python3,kivy==2.3.0,pillow==10.2.0,pyjnius
 
