@@ -1,75 +1,64 @@
-# ... (기본 설정 및 DataManager 클래스는 이전과 동일) ...
+import os
+import traceback
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
+from kivy.graphics import Rectangle, Color
+from kivy.core.text import LabelBase
 
-class CharacterSelectScreen(BackgroundScreen):
-    """[toopen] 캐릭터 선택 화면 구현 (4단계로 가기 전 필수 관문)"""
-    def on_pre_enter(self):
-        self.data = DataManager.load()
-        self.build_ui()
+# [과제 1] 파일명 대소문자 통일 (사용자 요청: bg.png)
+BG_IMAGE = "bg.png" 
+FONT_NAME = "font.ttf"
 
-    def build_ui(self):
-        self.clear_widgets()
-        f = safe_font()
-        layout = BoxLayout(orientation='vertical', padding=30, spacing=20)
+def load_korean_font():
+    """[과제 2] 한글 깨짐 방지를 위한 폰트 강제 등록"""
+    # 현재 작업 디렉토리에서 폰트 파일 확인
+    font_path = os.path.join(os.getcwd(), FONT_NAME)
+    if os.path.exists(font_path):
+        LabelBase.register(name="KoreanFont", fn_regular=font_path)
+        return "KoreanFont"
+    return None
+
+class MainLayout(BoxLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.orientation = 'vertical'
         
-        # 상단 타이틀: [계정명] 캐릭터 선택
-        account_name = self.data.get("account_id", "toopen")
-        title = Label(
-            text=f"[{account_name}] 캐릭터 선택", 
-            font_name=f, 
-            size_hint_y=None, 
-            height=150, 
-            font_size='24sp'
-        )
-        layout.add_widget(title)
-
-        # 캐릭터 6개 그리드 배치 (사진과 동일한 2열 구성)
-        grid = GridLayout(cols=2, spacing=15, padding=10)
+        # 배경 이미지 설정
+        with self.canvas.before:
+            if os.path.exists(BG_IMAGE):
+                # 이미지가 있을 경우 출력
+                self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
+            else:
+                # [과제 7 대비] 이미지 파일이 없을 때 앱이 튕기지 않도록 검은색 배경 처리
+                Color(0.1, 0.1, 0.1, 1)
+                self.rect = Rectangle(pos=self.pos, size=self.size)
         
-        # 1번부터 6번 캐릭터 버튼 생성
-        for i in range(1, 7):
-            char_key = f"char_{i}_name"
-            # 저장된 이름이 있으면 표시, 없으면 'n번 캐릭터'로 표시
-            display_name = self.data.get(char_key, f"{i}번 캐릭터")
-            
-            btn = Button(
-                text=display_name,
-                font_name=f,
-                background_normal='', # 배경색 적용을 위해 초기화
-                background_color=(0.1, 0.15, 0.2, 0.9), # 어두운 네이비 톤 (사진 느낌)
-                font_size='18sp'
-            )
-            # 버튼 클릭 시 해당 캐릭터의 세부 정보 화면으로 이동 (캐릭터 번호 전달)
-            btn.bind(on_release=lambda x, idx=i: self.select_character(idx))
-            grid.add_widget(btn)
-            
-        layout.add_widget(grid)
+        self.bind(pos=self.update_rect, size=self.update_rect)
+        
+        # 1단계 성공 여부 확인용 텍스트
+        f = load_korean_font()
+        self.add_widget(Label(
+            text="[1단계 성공]\n배경(bg.png)과 한글이 보이나요?", 
+            font_name=f if f else None,
+            font_size='28sp',
+            halign='center'
+        ))
 
-        # 하단 취소/뒤로가기 버튼
-        bottom_btn = Button(
-            text="취소", 
-            font_name=f, 
-            size_hint_y=None, 
-            height=120,
-            background_color=(0.3, 0.3, 0.3, 1)
-        )
-        bottom_btn.bind(on_release=lambda x: setattr(self.manager, 'current', 'account_manager'))
-        layout.add_widget(bottom_btn)
+    def update_rect(self, *args):
+        self.rect.pos = self.pos
+        self.rect.size = self.size
 
-        self.add_widget(layout)
-
-    def select_character(self, index):
-        # 현재 선택된 캐릭터 번호를 임시 저장하고 세부 화면으로 이동
-        self.app = App.get_running_app()
-        self.app.selected_char_index = index 
-        self.manager.current = 'detail'
-
-# App 클래스의 build 부분에 화면 등록 추가
-class PT1App(App):
-    selected_char_index = 1 # 기본값
-
+class PT1Manager(App):
     def build(self):
-        sm = ScreenManager(transition=FadeTransition())
-        # ... 다른 화면들 ...
-        sm.add_widget(CharacterSelectScreen(name='char_select'))
-        sm.add_widget(CharDetailScreen(name='detail'))
-        return sm
+        try:
+            # 정상 실행 시 레이아웃 반환
+            return MainLayout()
+        except Exception:
+            # [과제 7] 실행 중 에러 발생 시 화면에 에러 로그 출력 (Traceback)
+            error_msg = traceback.format_exc()
+            print(error_msg)
+            return Label(text=f"에러 발생!\n\n{error_msg}", color=(1, 0, 0, 1))
+
+if __name__ == '__main__':
+    PT1Manager().run()
