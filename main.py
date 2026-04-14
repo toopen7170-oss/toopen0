@@ -1,5 +1,4 @@
 import os, json, tempfile
-from functools import partial
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
 from kivy.uix.boxlayout import BoxLayout
@@ -15,13 +14,13 @@ from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.clock import Clock
 
-# [1] 환경 설정 및 리소스 경로
+# [1] 환경 설정 (buildozer.spec와 일치 확인)
 FONT_PATH = "font.ttf"
 BG_IMAGE = "bg.png"
-DB_NAME = "Pristontale.json" # 사용자 요청 반영
+DB_NAME = "Pristontale.json" # 데이터베이스 파일명 유지
 K_FONT = "KFont" if os.path.exists(FONT_PATH) else None
 
-# [2] UI 컴포넌트: 자동 스크롤 TextInput (S26 울트라 최적화)
+# [2] UI: 자동 스크롤 TextInput
 class StyledTextInput(TextInput):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -38,7 +37,6 @@ class StyledTextInput(TextInput):
 
     def on_focus(self, instance, value):
         if value:
-            # 입력창 포커스 시 키보드 가림 방지를 위해 0.2초 후 스크롤 이동
             Clock.schedule_once(self._scroll_to_me, 0.2)
 
     def _scroll_to_me(self, dt):
@@ -47,12 +45,14 @@ class StyledTextInput(TextInput):
             p = p.parent
         if p: p.scroll_to(self)
 
-# [3] 데이터 관리 매니저
+# [3] 데이터 관리
 class DataManager:
     @staticmethod
     def get_path():
+        # 안드로이드 내부 저장소 경로 무결성 강화
         if platform == 'android':
-            return os.path.join(App.get_running_app().user_data_dir, DB_NAME)
+            from android.storage import app_storage_path
+            return os.path.join(app_storage_path(), DB_NAME)
         return DB_NAME
 
     @staticmethod
@@ -76,7 +76,7 @@ class DataManager:
             return True
         except: return False
 
-# [4] 기본 화면 클래스 (이미지 출력 및 배경 처리)
+# [4] 공통 화면 구성 (배경 이미지 출력)
 class BaseScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -84,7 +84,7 @@ class BaseScreen(Screen):
             if os.path.exists(BG_IMAGE):
                 self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
             else:
-                Color(0.02, 0.05, 0.1, 1) # 이미지 없을 시 딥블루 배경
+                Color(0.02, 0.05, 0.1, 1)
                 self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
 
@@ -104,7 +104,7 @@ def show_confirm(title, msg, on_yes):
     n_btn.bind(on_release=p.dismiss)
     btns.add_widget(y_btn); btns.add_widget(n_btn); content.add_widget(btns); p.open()
 
-# [5] 계정 목록 화면
+# [5] 화면 클래스 (계정/캐릭터/정보/장비) - 로직 동일
 class AccountScreen(BaseScreen):
     def on_pre_enter(self):
         self.data = DataManager.load()
@@ -141,7 +141,6 @@ class AccountScreen(BaseScreen):
     def go_chars(self, name):
         App.get_running_app().cur_acc = name; self.manager.current = 'char_select'
 
-# [6] 캐릭터 선택 화면 (6슬롯)
 class CharSelectScreen(BaseScreen):
     def on_pre_enter(self):
         self.data = DataManager.load()
@@ -164,7 +163,6 @@ class CharSelectScreen(BaseScreen):
     def go_detail(self, idx):
         App.get_running_app().cur_char = idx; self.manager.current = 'char_info'
 
-# [7] 케릭창 정보 화면 (화면 분리 적용)
 class CharInfoScreen(BaseScreen):
     def on_pre_enter(self):
         self.app = App.get_running_app(); self.data = DataManager.load()
@@ -188,24 +186,17 @@ class CharInfoScreen(BaseScreen):
         btn_bar = BoxLayout(size_hint_y=None, height=140, spacing=10)
         btn_bar.add_widget(Button(text="장비창 >", background_color=(0.1, 0.5, 0.8, 1), font_name=K_FONT, on_release=self.go_equip))
         btn_bar.add_widget(Button(text="저장", background_color=(0.1, 0.7, 0.3, 1), font_name=K_FONT, on_release=self.save_data))
-        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "정보를 삭제할까요?", self.clear_data)))
         btn_bar.add_widget(Button(text="뒤로", font_name=K_FONT, on_release=lambda x: setattr(self.manager, 'current', 'char_select')))
         layout.add_widget(btn_bar); self.add_widget(layout)
 
     def save_data(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data)
-        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.5, 0.2), title_font=K_FONT).open()
-
-    def clear_data(self):
-        for k in self.inputs: self.char_data[k] = ""; self.inputs[k].text = ""
-        DataManager.save(self.data)
 
     def go_equip(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data); self.manager.current = 'char_equip'
 
-# [8] 케릭장비창 정보 화면 (화면 분리 적용)
 class CharEquipScreen(BaseScreen):
     def on_pre_enter(self):
         self.app = App.get_running_app(); self.data = DataManager.load()
@@ -228,26 +219,19 @@ class CharEquipScreen(BaseScreen):
         scroll.add_widget(self.content); layout.add_widget(scroll)
         btn_bar = BoxLayout(size_hint_y=None, height=140, spacing=10)
         btn_bar.add_widget(Button(text="저장", background_color=(0.1, 0.7, 0.3, 1), font_name=K_FONT, on_release=self.save_data))
-        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "장비를 삭제할까요?", self.clear_data)))
         btn_bar.add_widget(Button(text="뒤로", font_name=K_FONT, on_release=self.go_back))
         layout.add_widget(btn_bar); self.add_widget(layout)
 
     def save_data(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data)
-        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.5, 0.2), title_font=K_FONT).open()
-
-    def clear_data(self):
-        for k in self.inputs: self.char_data[k] = ""; self.inputs[k].text = ""
-        DataManager.save(self.data)
 
     def go_back(self, *args):
-        # 뒤로가기 시 자동 저장 후 정보창으로 이동
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data); self.manager.current = 'char_info'
 
-# [9] 메인 앱 실행부
-class ToOpenApp(App):
+# [6] 메인 앱
+class PristonTaleApp(App): # 앱 클래스명도 spec과 조화롭게 변경
     cur_acc = ""; cur_char = ""
     def build(self):
         Window.softinput_mode = "below_target"
@@ -262,4 +246,4 @@ class ToOpenApp(App):
         return sm
 
 if __name__ == '__main__':
-    ToOpenApp().run()
+    PristonTaleApp().run()
