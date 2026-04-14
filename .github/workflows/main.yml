@@ -35,12 +35,15 @@ jobs:
 
       - name: Build with Buildozer
         run: |
-          # 서버의 기본 NDK 경로가 Buildozer를 방해하지 못하도록 강제 재설정
+          # 서버 기본 환경 변수 완전히 무력화 및 Buildozer 전용 경로 강제 지정
+          unset GRADLE_HOME
           export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
           export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
           export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
           export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
-          buildozer android debug
+          
+          # 상세 로그(-v)를 켜서 실패 시 정확한 원인 파악
+          buildozer -v android debug
         shell: bash
         env:
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
