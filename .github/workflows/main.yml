@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK 215-FINAL
 
 on:
   push:
@@ -8,24 +8,13 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Install dependencies
+      - name: Kill Server Tools & Build (Final Unified Block)
         run: |
+          # 1. 시스템 의존성 설치
           sudo apt update
           sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
@@ -33,20 +22,29 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-      - name: Build with Buildozer
-        run: |
-          # 서버 기본 환경 변수 완전히 무력화 및 Buildozer 전용 경로 강제 지정
-          unset GRADLE_HOME
-          export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-          export ANDROID_NDK_HOME=$HOME/.buildozer/android/platform/android-ndk-r25b
-          export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
-          export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
+          # 2. 서버 방해 요소 물리적 파괴 및 커맨드 해시 완전 초기화
+          sudo rm -f /usr/bin/gradle
+          sudo rm -rf /usr/share/gradle
+          hash -r
+
+          # 3. 환경 변수 고정 및 런타임 독점
+          export JAVA_HOME=$JAVA_HOME_17_X64
+          export PATH=$HOME/.local/bin:$JAVA_HOME/bin:$PATH
           
-          # 상세 로그(-v)를 켜서 실패 시 정확한 원인 파악
+          # 4. 청정 빌드 환경 조성
+          rm -rf .buildozer
+          mkdir -p ~/.android && touch ~/.android/repositories.cfg
+          yes | sdkmanager --licenses || true
+
+          # 5. 인라인 주입 빌드 (서버 개입 0%)
+          hash -r
+          JAVA_HOME=$JAVA_HOME_17_X64 \
+          GRADLE_HOME="" \
+          GRADLE_USER_HOME=$HOME/.gradle \
+          BUILDOZER_ALLOW_KIVY_NEW_DESIGN=1 \
           buildozer -v android debug
         shell: bash
         env:
-          BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
           USER: root
@@ -54,5 +52,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PT1-Chart-App-APK
+          name: toopen0-APK
           path: bin/*.apk
