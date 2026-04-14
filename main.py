@@ -11,19 +11,22 @@ from kivy.clock import Clock
 from kivy.utils import platform
 from kivy.core.text import LabelBase
 
-# [전수검사] S26 울트라 터치 프리징 방지
+# [전수검사] S26 울트라 프리징 방지 및 키보드 모드 설정
 Window.softinput_mode = 'pan'
 
-# 리소스 경로 및 폰트 등록
-FONT_PATH = os.path.join(os.path.dirname(__file__), 'font.ttf')
+# 절대 경로를 통한 폰트 등록 (깨짐 방지)
+BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+FONT_PATH = os.path.join(BASE_PATH, 'font.ttf')
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="CustomFont", fn_regular=FONT_PATH)
 
 def get_data_path():
     if platform == 'android':
         from android.storage import app_storage_path
-        return os.path.join(app_storage_path(), 'Pristontale.json')
-    return 'Pristontale.json'
+        path = os.path.join(app_storage_path(), 'Pristontale.json')
+    else:
+        path = os.path.join(BASE_PATH, 'Pristontale.json')
+    return path
 
 class DataManager:
     @staticmethod
@@ -33,22 +36,28 @@ class DataManager:
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except: pass
+            except Exception as e:
+                print(f"Load Error: {e}")
         return {"accounts": []}
 
     @staticmethod
     def save(data):
-        with open(get_data_path(), 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        path = get_data_path()
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            return True
+        except Exception as e:
+            print(f"Save Error: {e}")
+            return False
 
-# [디자인 반영] 사진 속 초록색 테마 및 검색바 레이아웃
 KV = '''
 <StyledButton@Button>:
     font_name: "CustomFont" if app.font_exists else "Roboto"
     background_normal: ''
-    background_color: (0, 0.3, 0.1, 1)
+    background_color: (0, 0.3, 0.1, 1)  # 사진 속 진한 초록색
     size_hint_y: None
-    height: '50dp'
+    height: '55dp'
 
 <MainScreen>:
     canvas.before:
@@ -59,30 +68,31 @@ KV = '''
     BoxLayout:
         orientation: 'vertical'
         padding: 10
-        spacing: 10
+        spacing: 12
         
         Label:
             text: "PristonTale"
             font_name: "CustomFont" if app.font_exists else "Roboto"
-            font_size: '28sp'
+            font_size: '32sp'
             size_hint_y: None
-            height: '60dp'
+            height: '70dp'
 
         BoxLayout:
             size_hint_y: None
-            height: '45dp'
+            height: '50dp'
             spacing: 5
             TextInput:
                 id: search_input
                 hint_text: "전체 검색(계정, 아이템 등)"
                 multiline: False
+                font_name: "CustomFont" if app.font_exists else "Roboto"
                 background_color: (0.1, 0.1, 0.1, 0.8)
                 foreground_color: (1, 1, 1, 1)
                 on_text: root.filter_accounts(self.text)
             Button:
                 text: "검색"
                 size_hint_x: 0.2
-                background_color: (0, 0.1, 0.2, 1)
+                background_color: (0.05, 0.05, 0.15, 1)
 
         StyledButton:
             text: "+ 새 계정 만들기"
@@ -95,7 +105,7 @@ KV = '''
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: 8
+                spacing: 10
 
         StyledButton:
             text: "데이터 저장"
@@ -104,38 +114,52 @@ KV = '''
 <AccountItem@BoxLayout>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: '65dp'
-    padding: 10
+    height: '70dp'
+    padding: [15, 5]
     canvas.before:
         Color:
-            rgba: (0, 0, 0, 0.6)
+            rgba: (0, 0, 0, 0.7)
         RoundedRectangle:
             pos: self.pos
             size: self.size
-            radius: [10,]
+            radius: [12,]
     Label:
         id: name_label
         text: ""
         font_name: "CustomFont" if app.font_exists else "Roboto"
-    Button:
-        text: "상세"
-        size_hint_x: 0.2
-        on_release: app.go_detail(root.account_data)
+        halign: 'left'
+        valign: 'middle'
+        text_size: self.size
     Button:
         text: "삭제"
         size_hint_x: 0.2
-        background_color: (0.8, 0.1, 0.1, 1)
+        background_color: (0.7, 0.1, 0.1, 1)
         on_release: app.delete_account(root.account_data)
 '''
 
 class MainScreen(Screen):
     def show_add_popup(self):
-        content = BoxLayout(orientation='vertical', padding=15, spacing=15)
-        self.txt_input = TextInput(hint_text="생성할 계정 ID", multiline=False, height='60dp', size_hint_y=None)
-        add_btn = Button(text="생성 완료", background_color=(0, 0.3, 0.1, 1), background_normal='', size_hint_y=None, height='50dp')
+        # 튕김 방지: 키보드 강제 해제 후 팝업 생성
+        Window.release_all_keyboards()
+        content = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        self.txt_input = TextInput(
+            hint_text="생성할 계정 ID", 
+            multiline=False, 
+            height='65dp', 
+            size_hint_y=None,
+            font_name="CustomFont" if App.get_running_app().font_exists else "Roboto"
+        )
+        add_btn = Button(
+            text="생성 완료", 
+            background_color=(0, 0.3, 0.1, 1), 
+            background_normal='', 
+            size_hint_y=None, 
+            height='55dp'
+        )
         content.add_widget(self.txt_input)
         content.add_widget(add_btn)
-        self.popup = Popup(title="계정 생성", content=content, size_hint=(0.8, 0.4))
+        
+        self.popup = Popup(title="계정 생성", content=content, size_hint=(0.85, 0.45))
         add_btn.bind(on_release=self.add_account_logic)
         self.popup.open()
 
@@ -146,6 +170,7 @@ class MainScreen(Screen):
             app.data["accounts"].append({"name": name, "inventory": []})
             app.refresh_main_list()
             app.save_all()
+            # 자동 스크롤 하단 이동
             Clock.schedule_once(lambda dt: setattr(self.ids.scroll_view, 'scroll_y', 0), 0.1)
             self.popup.dismiss()
 
@@ -181,10 +206,11 @@ class PT1Manager(App):
         self.save_all()
 
     def save_all(self):
-        DataManager.save(self.data)
+        if DataManager.save(self.data):
+            print("Save Success")
 
 if __name__ == '__main__':
     if platform == 'android':
         from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_MEDIA_IMAGES, Permission.WRITE_EXTERNAL_STORAGE])
+        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
     PT1Manager().run()
