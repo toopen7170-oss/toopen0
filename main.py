@@ -15,17 +15,13 @@ from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.clock import Clock
 
-# [1] 안드로이드 환경 설정
-if platform == 'android':
-    from android.permissions import request_permissions, Permission
-
-# [2] 전역 설정 (사용자 요청: DB_NAME 변경)
+# [1] 환경 설정 및 리소스 경로
 FONT_PATH = "font.ttf"
 BG_IMAGE = "bg.png"
-DB_NAME = "Pristontale.json"
+DB_NAME = "Pristontale.json" # 사용자 요청 반영
 K_FONT = "KFont" if os.path.exists(FONT_PATH) else None
 
-# [3] UI: 자동 스크롤 TextInput (글씨 안보임 방지)
+# [2] UI 컴포넌트: 자동 스크롤 TextInput (S26 울트라 최적화)
 class StyledTextInput(TextInput):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -42,6 +38,7 @@ class StyledTextInput(TextInput):
 
     def on_focus(self, instance, value):
         if value:
+            # 입력창 포커스 시 키보드 가림 방지를 위해 0.2초 후 스크롤 이동
             Clock.schedule_once(self._scroll_to_me, 0.2)
 
     def _scroll_to_me(self, dt):
@@ -50,7 +47,7 @@ class StyledTextInput(TextInput):
             p = p.parent
         if p: p.scroll_to(self)
 
-# [4] 데이터 매니저 (Pristontale.json 처리)
+# [3] 데이터 관리 매니저
 class DataManager:
     @staticmethod
     def get_path():
@@ -79,7 +76,7 @@ class DataManager:
             return True
         except: return False
 
-# [5] 화면 공통 베이스
+# [4] 기본 화면 클래스 (이미지 출력 및 배경 처리)
 class BaseScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -87,7 +84,7 @@ class BaseScreen(Screen):
             if os.path.exists(BG_IMAGE):
                 self.rect = Rectangle(source=BG_IMAGE, pos=self.pos, size=self.size)
             else:
-                Color(0.02, 0.05, 0.1, 1)
+                Color(0.02, 0.05, 0.1, 1) # 이미지 없을 시 딥블루 배경
                 self.rect = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self.update_rect, size=self.update_rect)
 
@@ -107,7 +104,7 @@ def show_confirm(title, msg, on_yes):
     n_btn.bind(on_release=p.dismiss)
     btns.add_widget(y_btn); btns.add_widget(n_btn); content.add_widget(btns); p.open()
 
-# [6] 계정 목록
+# [5] 계정 목록 화면
 class AccountScreen(BaseScreen):
     def on_pre_enter(self):
         self.data = DataManager.load()
@@ -117,17 +114,13 @@ class AccountScreen(BaseScreen):
         self.clear_widgets()
         layout = BoxLayout(orientation='vertical', padding=40, spacing=20)
         layout.add_widget(Button(text="+ 새 계정 생성", size_hint_y=None, height=140, background_color=(0.1, 0.6, 0.3, 1), font_name=K_FONT, on_release=self.add_acc_pop))
-        
         scroll = ScrollView(); grid = GridLayout(cols=1, size_hint_y=None, spacing=15)
         grid.bind(minimum_height=grid.setter('height'))
-        
-        accounts = self.data.get("accounts", {})
-        for acc_id in sorted(accounts.keys()):
+        for acc_id in sorted(self.data.get("accounts", {}).keys()):
             row = BoxLayout(size_hint_y=None, height=150, spacing=10)
             btn = Button(text=f"ID: {acc_id}", background_color=(0.2, 0.4, 0.7, 1), font_name=K_FONT, on_release=lambda x, a=acc_id: self.go_chars(a))
             del_b = Button(text="삭제", size_hint_x=0.2, background_color=(0.7, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x, a=acc_id: show_confirm("삭제", f"'{a}' 삭제?", lambda: self.del_acc(a)))
             row.add_widget(btn); row.add_widget(del_b); grid.add_widget(row)
-        
         scroll.add_widget(grid); layout.add_widget(scroll); self.add_widget(layout)
 
     def add_acc_pop(self, *args):
@@ -148,7 +141,7 @@ class AccountScreen(BaseScreen):
     def go_chars(self, name):
         App.get_running_app().cur_acc = name; self.manager.current = 'char_select'
 
-# [7] 캐릭터 선택
+# [6] 캐릭터 선택 화면 (6슬롯)
 class CharSelectScreen(BaseScreen):
     def on_pre_enter(self):
         self.data = DataManager.load()
@@ -157,15 +150,13 @@ class CharSelectScreen(BaseScreen):
     def render_ui(self):
         self.clear_widgets(); app = App.get_running_app()
         layout = BoxLayout(orientation='vertical', padding=40, spacing=25)
-        layout.add_widget(Label(text=f"접속 중: {app.cur_acc}", size_hint_y=None, height=80, font_name=K_FONT, font_size=40))
-        
+        layout.add_widget(Label(text=f"ID: {app.cur_acc}", size_hint_y=None, height=80, font_name=K_FONT, font_size=40))
         grid = GridLayout(cols=2, spacing=20)
         chars = self.data["accounts"].get(app.cur_acc, {})
         for i in range(1, 7):
             c = chars.get(str(i), {})
             btn = Button(text=f"Slot {i}\n{c.get('이름', '데이터 없음')}", halign='center', font_name=K_FONT)
             btn.bind(on_release=lambda x, idx=i: self.go_detail(str(idx))); grid.add_widget(btn)
-        
         layout.add_widget(grid)
         layout.add_widget(Button(text="뒤로가기", size_hint_y=None, height=120, font_name=K_FONT, on_release=lambda x: setattr(self.manager, 'current', 'account_main')))
         self.add_widget(layout)
@@ -173,7 +164,7 @@ class CharSelectScreen(BaseScreen):
     def go_detail(self, idx):
         App.get_running_app().cur_char = idx; self.manager.current = 'char_info'
 
-# [8] 케릭창 정보 (전수 검증 완료)
+# [7] 케릭창 정보 화면 (화면 분리 적용)
 class CharInfoScreen(BaseScreen):
     def on_pre_enter(self):
         self.app = App.get_running_app(); self.data = DataManager.load()
@@ -182,12 +173,10 @@ class CharInfoScreen(BaseScreen):
 
     def render_ui(self):
         self.clear_widgets()
-        main = BoxLayout(orientation='vertical', padding=20)
-        main.add_widget(Label(text="[ 캐릭터 정보 ]", size_hint_y=None, height=80, font_name=K_FONT, font_size=38, color=(1, 0.8, 0, 1)))
-
+        layout = BoxLayout(orientation='vertical', padding=20)
+        layout.add_widget(Label(text="[ 캐릭터 정보 ]", size_hint_y=None, height=80, font_name=K_FONT, font_size=38, color=(1, 0.8, 0, 1)))
         scroll = ScrollView(); self.content = BoxLayout(orientation='vertical', size_hint_y=None, spacing=10, padding=[0, 0, 0, 100])
         self.content.bind(minimum_height=self.content.setter('height'))
-
         self.inputs = {}
         fields = ["직위", "이름", "클랜", "레벨", "생명력", "기력", "근력", "힘", "정신력", "재능", "민첩성", "건강", "능력치", "명중력", "공격력", "방어력", "흡수력", "속도"]
         for f in fields:
@@ -195,33 +184,28 @@ class CharInfoScreen(BaseScreen):
             row.add_widget(Label(text=f, size_hint_x=0.35, font_name=K_FONT, font_size=28))
             ti = StyledTextInput(text=str(self.char_data.get(f, "")))
             row.add_widget(ti); self.inputs[f] = ti; self.content.add_widget(row)
-
-        scroll.add_widget(self.content); main.add_widget(scroll)
-
+        scroll.add_widget(self.content); layout.add_widget(scroll)
         btn_bar = BoxLayout(size_hint_y=None, height=140, spacing=10)
         btn_bar.add_widget(Button(text="장비창 >", background_color=(0.1, 0.5, 0.8, 1), font_name=K_FONT, on_release=self.go_equip))
         btn_bar.add_widget(Button(text="저장", background_color=(0.1, 0.7, 0.3, 1), font_name=K_FONT, on_release=self.save_data))
-        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "정보를 초기화할까요?", self.clear_data)))
+        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "정보를 삭제할까요?", self.clear_data)))
         btn_bar.add_widget(Button(text="뒤로", font_name=K_FONT, on_release=lambda x: setattr(self.manager, 'current', 'char_select')))
-        
-        main.add_widget(btn_bar); self.add_widget(main)
+        layout.add_widget(btn_bar); self.add_widget(layout)
 
     def save_data(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data)
-        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.6, 0.2), title_font=K_FONT).open()
+        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.5, 0.2), title_font=K_FONT).open()
 
     def clear_data(self):
-        for k in self.inputs:
-            self.char_data[k] = ""
-            self.inputs[k].text = ""
+        for k in self.inputs: self.char_data[k] = ""; self.inputs[k].text = ""
         DataManager.save(self.data)
 
     def go_equip(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data); self.manager.current = 'char_equip'
 
-# [9] 케릭장비창 정보 (전수 검증 완료)
+# [8] 케릭장비창 정보 화면 (화면 분리 적용)
 class CharEquipScreen(BaseScreen):
     def on_pre_enter(self):
         self.app = App.get_running_app(); self.data = DataManager.load()
@@ -230,12 +214,10 @@ class CharEquipScreen(BaseScreen):
 
     def render_ui(self):
         self.clear_widgets()
-        main = BoxLayout(orientation='vertical', padding=20)
-        main.add_widget(Label(text="[ 장비 정보 ]", size_hint_y=None, height=80, font_name=K_FONT, font_size=38, color=(0, 0.8, 1, 1)))
-
+        layout = BoxLayout(orientation='vertical', padding=20)
+        layout.add_widget(Label(text="[ 장비 정보 ]", size_hint_y=None, height=80, font_name=K_FONT, font_size=38, color=(0, 0.8, 1, 1)))
         scroll = ScrollView(); self.content = BoxLayout(orientation='vertical', size_hint_y=None, spacing=10, padding=[0, 0, 0, 100])
         self.content.bind(minimum_height=self.content.setter('height'))
-
         self.inputs = {}
         fields = ["한손무기", "두손무기", "갑옷", "방패", "슬릿", "장갑", "부츠", "쉘텀", "링1", "링2", "아뮬랫", "기타"]
         for f in fields:
@@ -243,28 +225,28 @@ class CharEquipScreen(BaseScreen):
             row.add_widget(Label(text=f, size_hint_x=0.35, font_name=K_FONT, font_size=28))
             ti = StyledTextInput(text=str(self.char_data.get(f, "")))
             row.add_widget(ti); self.inputs[f] = ti; self.content.add_widget(row)
-
-        scroll.add_widget(self.content); main.add_widget(scroll)
-
+        scroll.add_widget(self.content); layout.add_widget(scroll)
         btn_bar = BoxLayout(size_hint_y=None, height=140, spacing=10)
         btn_bar.add_widget(Button(text="저장", background_color=(0.1, 0.7, 0.3, 1), font_name=K_FONT, on_release=self.save_data))
-        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "장비를 초기화할까요?", self.clear_data)))
-        btn_bar.add_widget(Button(text="뒤로", font_name=K_FONT, on_release=lambda x: setattr(self.manager, 'current', 'char_info')))
-        
-        main.add_widget(btn_bar); self.add_widget(main)
+        btn_bar.add_widget(Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1), font_name=K_FONT, on_release=lambda x: show_confirm("삭제", "장비를 삭제할까요?", self.clear_data)))
+        btn_bar.add_widget(Button(text="뒤로", font_name=K_FONT, on_release=self.go_back))
+        layout.add_widget(btn_bar); self.add_widget(layout)
 
     def save_data(self, *args):
         for k, v in self.inputs.items(): self.char_data[k] = v.text
         DataManager.save(self.data)
-        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.6, 0.2), title_font=K_FONT).open()
+        Popup(title="알림", content=Label(text="저장되었습니다.", font_name=K_FONT), size_hint=(0.5, 0.2), title_font=K_FONT).open()
 
     def clear_data(self):
-        for k in self.inputs:
-            self.char_data[k] = ""
-            self.inputs[k].text = ""
+        for k in self.inputs: self.char_data[k] = ""; self.inputs[k].text = ""
         DataManager.save(self.data)
 
-# [10] 앱 실행부
+    def go_back(self, *args):
+        # 뒤로가기 시 자동 저장 후 정보창으로 이동
+        for k, v in self.inputs.items(): self.char_data[k] = v.text
+        DataManager.save(self.data); self.manager.current = 'char_info'
+
+# [9] 메인 앱 실행부
 class ToOpenApp(App):
     cur_acc = ""; cur_char = ""
     def build(self):
@@ -272,7 +254,6 @@ class ToOpenApp(App):
         if os.path.exists(FONT_PATH):
             LabelBase.register(name="KFont", fn_regular=FONT_PATH)
             LabelBase.register(name="Roboto", fn_regular=FONT_PATH)
-        
         sm = ScreenManager(transition=FadeTransition(duration=0.2))
         sm.add_widget(AccountScreen(name='account_main'))
         sm.add_widget(CharSelectScreen(name='char_select'))
