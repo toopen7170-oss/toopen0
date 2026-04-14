@@ -1,6 +1,6 @@
 [app]
-title = toopen0
-package.name = toopen0
+title = PristonTale
+package.name = PristonTale
 package.domain = org.test
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt
