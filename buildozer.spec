@@ -1,33 +1,29 @@
-[buildozer]
-log_level = 2
-warn_on_root = 1
-
 [app]
 title = toopen0
 package.name = toopen0
-package.domain = org.toopen
+package.domain = org.test
 source.dir = .
-source.include_exts = py,png,jpg,kv,ttf,json
-version = 4.25
+source.include_exts = py,png,jpg,jpeg,ttf,txt
+source.include_patterns = assets/*,images/*
+version = 0.1
 
-# 핵심 라이브러리 및 권한
-requirements = python3,kivy==2.3.0,android,pyjnius,pillow
+requirements = python3,kivy==2.3.0,pillow,pyjnius
+
 orientation = portrait
-android.permissions = INTERNET,READ_MEDIA_IMAGES,READ_MEDIA_VIDEO,MANAGE_EXTERNAL_STORAGE
-
-# 서버 환경 변수 충돌 방지 및 NDK 고정
-android.api = 34
-android.minapi = 24
-android.ndk = 25b
-android.ndk_api = 24
+fullscreen = 0
 android.archs = arm64-v8a
-android.allow_backup = True
+
+# 서버 환경 고착 방지용 고정 버전
+android.api = 33
+android.minapi = 21
+android.ndk = 25b
 android.accept_sdk_license = True
 android.skip_update = False
+android.log_level = 2
 
-# 시스템 및 Gradle 호환성 강화
-android.copy_libs = True
-android.enable_androidx = True
-android.logcat_filters = *:S python:D
-android.add_activities = org.kivy.android.PythonActivity
+icon.filename = icon.png
+presplash.filename = bg.png
 
+[buildozer]
+log_level = 2
+warn_on_root = 0
