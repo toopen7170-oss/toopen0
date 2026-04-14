@@ -11,15 +11,14 @@ from kivy.clock import Clock
 from kivy.utils import platform
 from kivy.core.text import LabelBase
 
-# [전수검사 수정 1] S26 울트라 터치 프리징 방지를 위한 소프트 키보드 설정 강제 고정
+# [전수검사 1] S26 울트라 터치 프리징 및 키보드 간섭 방지 설정
 Window.softinput_mode = 'pan'
 
-# [전수검사 수정 2] 폰트 경로 무결성 확보 (font.ttf)
+# [전수검사 2] 리소스 경로 및 폰트 등록 무결성 확보
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'font.ttf')
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="CustomFont", fn_regular=FONT_PATH)
 
-# [전수검사 수정 3] 안드로이드 저장소 권한 및 데이터 경로 설정
 def get_data_path():
     if platform == 'android':
         from android.storage import app_storage_path
@@ -31,8 +30,10 @@ class DataManager:
     def load():
         path = get_data_path()
         if os.path.exists(path):
-            with open(path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except: pass
         return {"accounts": []}
 
     @staticmethod
@@ -40,12 +41,14 @@ class DataManager:
         with open(get_data_path(), 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
-# UI 정의 (Kivy 디자인 언어)
+# [전수검사 3] 사진 디자인(초록색 테마) 및 검색바 레이아웃 반영
 KV = '''
 <StyledButton@Button>:
     font_name: "CustomFont" if app.font_exists else "Roboto"
     background_normal: ''
-    background_color: (0.2, 0.6, 1, 1)
+    background_color: (0, 0.3, 0.1, 1)  # 사진 속 진한 초록색
+    size_hint_y: None
+    height: '50dp'
 
 <MainScreen>:
     canvas.before:
@@ -55,14 +58,37 @@ KV = '''
             size: self.size
     BoxLayout:
         orientation: 'vertical'
-        padding: 20
-        spacing: 15
+        padding: 10
+        spacing: 10
         
+        # 상단 타이틀 및 검색바 (사진 반영)
         Label:
-            text: "PT1 MANAGER (무결점 빌드)"
+            text: "PristonTale"
             font_name: "CustomFont" if app.font_exists else "Roboto"
-            font_size: '24sp'
-            size_hint_y: 0.1
+            font_size: '28sp'
+            size_hint_y: None
+            height: '60dp'
+            color: (1, 1, 1, 1)
+
+        BoxLayout:
+            size_hint_y: None
+            height: '45dp'
+            spacing: 5
+            TextInput:
+                id: search_input
+                hint_text: "전체 검색(계정, 아이템 등)"
+                multiline: False
+                background_color: (0.1, 0.1, 0.1, 0.8)
+                foreground_color: (1, 1, 1, 1)
+                on_text: root.filter_accounts(self.text)
+            Button:
+                text: "검색"
+                size_hint_x: 0.2
+                background_color: (0, 0.1, 0.2, 1)
+
+        StyledButton:
+            text: "+ 새 계정 만들기"
+            on_release: root.show_add_popup()
             
         ScrollView:
             id: scroll_view
@@ -71,33 +97,30 @@ KV = '''
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: 10
+                spacing: 8
 
-        BoxLayout:
-            size_hint_y: 0.15
-            spacing: 10
-            StyledButton:
-                text: "계정 추가"
-                on_release: root.show_add_popup()
-            StyledButton:
-                text: "데이터 저장"
-                on_release: app.save_all()
+        StyledButton:
+            text: "데이터 저장"
+            on_release: app.save_all()
 
 <AccountItem@BoxLayout>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: '60dp'
-    padding: 5
+    height: '65dp'
+    padding: 10
     canvas.before:
         Color:
-            rgba: (0, 0, 0, 0.5)
-        Rectangle:
+            rgba: (0, 0, 0, 0.6)
+        RoundedRectangle:
             pos: self.pos
             size: self.size
+            radius: [10,]
     Label:
         id: name_label
         text: ""
         font_name: "CustomFont" if app.font_exists else "Roboto"
+        halign: 'left'
+        text_size: self.size
     Button:
         text: "상세"
         size_hint_x: 0.2
@@ -105,51 +128,35 @@ KV = '''
     Button:
         text: "삭제"
         size_hint_x: 0.2
-        background_color: (1, 0, 0, 1)
+        background_color: (0.8, 0.1, 0.1, 1)
         on_release: app.delete_account(root.account_data)
-
-<DetailScreen>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: 10
-        Label:
-            id: detail_title
-            font_name: "CustomFont" if app.font_exists else "Roboto"
-            size_hint_y: 0.1
-        ScrollView:
-            BoxLayout:
-                id: inven_list
-                orientation: 'vertical'
-                size_hint_y: None
-                height: self.minimum_height
-        BoxLayout:
-            size_hint_y: 0.1
-            Button:
-                text: "아이템 추가"
-                on_release: root.add_item()
-            Button:
-                text: "뒤로가기"
-                on_release: app.root.current = 'main'
 '''
 
 class MainScreen(Screen):
     def show_add_popup(self):
-        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        # [전수검사 수정 4] 비동기 포커스 처리로 S26 프리징 방지
-        self.txt_input = TextInput(hint_text="계정명 입력", multiline=False, font_name="CustomFont" if App.get_running_app().font_exists else "Roboto")
+        # [전수검사 4] 팝업 디자인 및 프리징 방지 로직 (사진 반영)
+        content = BoxLayout(orientation='vertical', padding=15, spacing=15)
+        self.txt_input = TextInput(
+            hint_text="생성할 계정 ID", 
+            multiline=False, 
+            font_size='18sp',
+            size_hint_y=None,
+            height='60dp'
+        )
         
-        btn_box = BoxLayout(size_hint_y=0.4, spacing=10)
-        add_btn = Button(text="추가")
-        cancel_btn = Button(text="취소")
+        add_btn = Button(
+            text="생성 완료", 
+            background_normal='', 
+            background_color=(0, 0.3, 0.1, 1),
+            size_hint_y=None,
+            height='50dp'
+        )
         
-        btn_box.add_widget(add_btn)
-        btn_box.add_widget(cancel_btn)
         content.add_widget(self.txt_input)
-        content.add_widget(btn_box)
+        content.add_widget(add_btn)
         
-        self.popup = Popup(title="새 계정 생성", content=content, size_hint=(0.8, 0.4))
+        self.popup = Popup(title="계정 생성", content=content, size_hint=(0.8, 0.5))
         add_btn.bind(on_release=self.add_account_logic)
-        cancel_btn.bind(on_release=self.popup.dismiss)
         self.popup.open()
 
     def add_account_logic(self, instance):
@@ -159,38 +166,32 @@ class MainScreen(Screen):
             new_acc = {"name": name, "inventory": []}
             app.data["accounts"].append(new_acc)
             app.refresh_main_list()
-            # [전수검사 수정 5] 자동 스크롤 하단 이동
+            app.save_all()
+            # [전수검사 5] 추가 후 하단 자동 스크롤
             Clock.schedule_once(lambda dt: self.scroll_to_bottom(), 0.1)
             self.popup.dismiss()
 
     def scroll_to_bottom(self):
         self.ids.scroll_view.scroll_y = 0
 
+    def filter_accounts(self, query):
+        app = App.get_running_app()
+        self.refresh_filtered_list(query.lower())
+
+    def refresh_filtered_list(self, query):
+        layout = self.ids.account_list
+        layout.clear_widgets()
+        app = App.get_running_app()
+        for acc in app.data["accounts"]:
+            if query in acc["name"].lower():
+                from kivy.factory import Factory
+                item = Factory.AccountItem()
+                item.ids.name_label.text = acc["name"]
+                item.account_data = acc
+                layout.add_widget(item)
+
 class DetailScreen(Screen):
     current_acc = None
-
-    def on_pre_enter(self):
-        self.ids.detail_title.text = f"[{self.current_acc['name']}] 인벤토리"
-        self.refresh_inven()
-
-    def refresh_inven(self):
-        self.ids.inven_list.clear_widgets()
-        for item in self.current_acc['inventory']:
-            row = BoxLayout(size_hint_y=None, height='40dp')
-            row.add_widget(Label(text=item, font_name="CustomFont" if App.get_running_app().font_exists else "Roboto"))
-            del_btn = Button(text="X", size_hint_x=0.2)
-            del_btn.bind(on_release=lambda x, it=item: self.delete_item(it))
-            row.add_widget(del_btn)
-            self.ids.inven_list.add_widget(row)
-
-    def add_item(self):
-        # 아이템 추가 로직 (간소화)
-        self.current_acc['inventory'].append("새 아이템")
-        self.refresh_inven()
-
-    def delete_item(self, item_name):
-        self.current_acc['inventory'].remove(item_name)
-        self.refresh_inven()
 
 class PT1Manager(App):
     def build(self):
@@ -200,10 +201,7 @@ class PT1Manager(App):
         
         self.sm = ScreenManager()
         self.main_screen = MainScreen(name='main')
-        self.detail_screen = DetailScreen(name='detail')
-        
         self.sm.add_widget(self.main_screen)
-        self.sm.add_widget(self.detail_screen)
         
         self.refresh_main_list()
         return self.sm
@@ -212,27 +210,22 @@ class PT1Manager(App):
         layout = self.main_screen.ids.account_list
         layout.clear_widgets()
         for acc in self.data["accounts"]:
-            # Custom Widget 인스턴스화 로직
             from kivy.factory import Factory
             item = Factory.AccountItem()
             item.ids.name_label.text = acc["name"]
             item.account_data = acc
             layout.add_widget(item)
 
-    def go_detail(self, acc_data):
-        self.detail_screen.current_acc = acc_data
-        self.sm.current = 'detail'
-
     def delete_account(self, acc_data):
         self.data["accounts"].remove(acc_data)
         self.refresh_main_list()
+        self.save_all()
 
     def save_all(self):
         DataManager.save(self.data)
 
 if __name__ == '__main__':
-    # [전수검사 수정 6] 안드로이드 사진첩 접근 권한 요청 (API 33 대응)
     if platform == 'android':
         from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_MEDIA_IMAGES, Permission.WRITE_EXTERNAL_STORAGE])
+        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
     PT1Manager().run()
