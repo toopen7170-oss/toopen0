@@ -1,4 +1,4 @@
-Name: Build APK
+name: Build APK
 
 on:
   push:
@@ -34,10 +34,9 @@ jobs:
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
       - name: Build with Buildozer
-        run: |
-          buildozer android debug
+        run: buildozer android debug
+        shell: bash
         env:
-          # 시스템 NDK와의 충돌을 방지하기 위해 환경 변수 정화
           BUILDOZER_ALLOW_KIVY_NEW_DESIGN: 1
           BUILDOZER_WARN_ON_ROOT: 0
           APP_ANDROID_ACCEPT_SDK_LICENSE: "1"
