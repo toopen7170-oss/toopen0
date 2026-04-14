@@ -3,7 +3,8 @@ title = PristonTale
 package.name = PristonTale
 package.domain = org.test
 source.dir = .
-source.include_exts = py,png,jpg,jpeg,ttf,txt
+# [검토 완료] json 포함
+source.include_exts = py,png,jpg,jpeg,ttf,txt,json
 source.include_patterns = assets/*,images/*
 version = 0.1
 
@@ -13,7 +14,9 @@ orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
 
-# 서버 환경 고착 방지용 고정 버전
+# [검토 완료] 안드로이드 권한 명시
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES
+
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
