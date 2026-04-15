@@ -14,17 +14,18 @@ from kivy.utils import platform
 from kivy.core.text import LabelBase
 from kivy.resources import resource_add_path
 
-# [전수검사] S26 울트라 최적화 및 경로 설정
-Window.softinput_mode = 'below_target'
+# [전수검사] S26 울트라 및 안드로이드 경로 무결성 확보
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 resource_add_path(BASE_PATH)
+Window.softinput_mode = 'below_target'
 
-# [폰트 무결성] Kivy 엔진 전체의 기본 폰트를 강제 변경하여 깨짐 방지
-FONT_NAME = 'font.ttf'
-if os.path.exists(os.path.join(BASE_PATH, FONT_NAME)):
-    LabelBase.register(name="CustomFont", fn_regular=FONT_NAME)
+# [폰트 집중 수정] 엔진 레벨에서 기본 폰트를 강제 변경 (깨짐 원천 차단)
+FONT_FILE = 'font.ttf'
+if os.path.exists(os.path.join(BASE_PATH, FONT_FILE)):
+    LabelBase.register(name="CustomFont", fn_regular=FONT_FILE)
     from kivy.core.text import Label as CoreLabel
-    CoreLabel.default_font = FONT_NAME
+    # 모든 위젯의 기본 폰트 자체를 사용자 폰트로 교체
+    CoreLabel.default_font = FONT_FILE
 
 def get_data_path():
     if platform == 'android':
@@ -69,8 +70,8 @@ KV = '''
         spacing: 12
         
         Label:
-            text: "PristonTale"
-            font_size: '32sp'
+            text: "PristonTale Manager"
+            font_size: '28sp'
             size_hint_y: None
             height: '70dp'
 
@@ -80,7 +81,7 @@ KV = '''
             spacing: 5
             TextInput:
                 id: search_input
-                hint_text: "전체 검색(계정, 아이템 등)"
+                hint_text: "계정 또는 아이템 검색"
                 multiline: False
                 background_color: (0.1, 0.1, 0.1, 0.8)
                 foreground_color: (1, 1, 1, 1)
@@ -90,11 +91,10 @@ KV = '''
                 size_hint_x: 0.2
 
         StyledButton:
-            text: "+ 새 계정 만들기"
+            text: "+ 새 계정 등록하기"
             on_release: root.show_add_popup()
             
         ScrollView:
-            id: scroll_view
             BoxLayout:
                 id: account_list
                 orientation: 'vertical'
@@ -103,13 +103,13 @@ KV = '''
                 spacing: 10
 
         StyledButton:
-            text: "데이터 저장"
+            text: "모든 데이터 저장"
             on_release: app.save_all()
 
 <AccountItem>:
     orientation: 'horizontal'
     size_hint_y: None
-    height: '70dp'
+    height: '75dp'
     padding: [15, 5]
     canvas.before:
         Color:
@@ -121,25 +121,28 @@ KV = '''
     Label:
         id: name_label
         text: ""
+        font_size: '18sp'
         halign: 'left'
         valign: 'middle'
         text_size: self.size
     Button:
         text: "삭제"
-        size_hint_x: 0.2
+        size_hint_x: 0.25
         background_color: (0.7, 0.1, 0.1, 1)
         on_release: root.confirm_delete()
 
 <DetailScreen>:
     BoxLayout:
         orientation: 'vertical'
+        padding: 20
         Label:
             id: detail_label
-            text: "계정 상세 정보"
+            text: ""
+            font_size: '20sp'
         Button:
-            text: "돌아가기"
+            text: "목록으로 돌아가기"
             size_hint_y: None
-            height: '50dp'
+            height: '55dp'
             on_release: app.root.current = 'main'
 '''
 
@@ -150,59 +153,56 @@ class AccountItem(ButtonBehavior, BoxLayout):
         self.ids.name_label.text = account_data['name']
 
     def on_release(self):
-        # [클릭 반응 해결] 계정 클릭 시 상세 화면으로 이동
+        # [클릭 반응 해결] 상세 화면으로 전환 및 데이터 전달
         app = App.get_running_app()
-        app.root.get_screen('detail').ids.detail_label.text = f"계정: {self.account_data['name']}\\n인벤토리 정보 없음"
+        app.root.get_screen('detail').ids.detail_label.text = f"계정명: {self.account_data['name']}\\n\\n상세 인벤토리 정보 준비 중..."
         app.root.current = 'detail'
 
     def confirm_delete(self):
-        # [삭제 확인 해결] 즉시 삭제 방지 및 확인 멘트 팝업
-        content = BoxLayout(orientation='vertical', padding=15, spacing=10)
-        msg = Label(text=f"[{self.account_data['name']}] 계정을\\n정말 삭제하시겠습니까?")
-        btn_layout = BoxLayout(spacing=10, size_hint_y=None, height='50dp')
+        # [삭제 확인 멘트 해결] 팝업 내부 커스텀 라벨로 깨짐 방지
+        content = BoxLayout(orientation='vertical', padding=15, spacing=15)
+        content.add_widget(Label(text=f"[{self.account_data['name']}] 계정을\\n정말 삭제하시겠습니까?", halign='center'))
         
-        yes_btn = Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1))
-        no_btn = Button(text="취소")
+        btns = BoxLayout(size_hint_y=None, height='50dp', spacing=10)
+        y_btn = Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1))
+        n_btn = Button(text="취소")
         
-        btn_layout.add_widget(yes_btn)
-        btn_layout.add_widget(no_btn)
-        content.add_widget(msg)
-        content.add_widget(btn_layout)
+        btns.add_widget(y_btn)
+        btns.add_widget(n_btn)
+        content.add_widget(btns)
         
-        popup = Popup(title="삭제 확인", content=content, size_hint=(0.8, 0.35), title_size='18sp')
-        yes_btn.bind(on_release=lambda x: self.actual_delete(popup))
-        no_btn.bind(on_release=popup.dismiss)
-        popup.open()
+        self.popup = Popup(title="", separator_height=0, title_size=0, content=content, size_hint=(0.8, 0.35))
+        y_btn.bind(on_release=self.perform_delete)
+        n_btn.bind(on_release=self.popup.dismiss)
+        self.popup.open()
 
-    def actual_delete(self, popup):
+    def perform_delete(self, instance):
         app = App.get_running_app()
         app.delete_account(self.account_data)
-        popup.dismiss()
+        self.popup.dismiss()
 
 class MainScreen(Screen):
     def show_add_popup(self):
-        # [튕김 방지] 타이틀 바 비활성화 후 내부 라벨 배치
         content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        title_label = Label(text="새 계정 생성", font_size='20sp', size_hint_y=None, height='40dp')
-        self.txt_input = TextInput(hint_text="계정 ID 입력", multiline=False, height='60dp', size_hint_y=None)
-        add_btn = Button(text="생성 완료", background_color=(0, 0.3, 0.1, 1), background_normal='', size_hint_y=None, height='55dp')
+        content.add_widget(Label(text="새 계정 추가", font_size='20sp', size_hint_y=None, height='40dp'))
+        self.txt_input = TextInput(hint_text="계정 ID 입력", multiline=False, size_hint_y=None, height='55dp')
+        add_btn = Button(text="추가 완료", background_color=(0, 0.3, 0.1, 1), size_hint_y=None, height='55dp')
         
-        content.add_widget(title_label)
         content.add_widget(self.txt_input)
         content.add_widget(add_btn)
         
-        self.popup = Popup(title="", separator_height=0, title_size=0, content=content, size_hint=(0.85, 0.45))
-        add_btn.bind(on_release=self.add_account_logic)
-        self.popup.open()
+        self.pop = Popup(title="", separator_height=0, title_size=0, content=content, size_hint=(0.85, 0.45))
+        add_btn.bind(on_release=self.add_logic)
+        self.pop.open()
 
-    def add_account_logic(self, instance):
+    def add_logic(self, instance):
         name = self.txt_input.text.strip()
         if name:
             app = App.get_running_app()
             app.data["accounts"].append({"name": name, "inventory": []})
             app.refresh_main_list()
             app.save_all()
-            self.popup.dismiss()
+            self.pop.dismiss()
 
     def filter_accounts(self, query):
         layout = self.ids.account_list
@@ -210,8 +210,7 @@ class MainScreen(Screen):
         app = App.get_running_app()
         for acc in app.data["accounts"]:
             if query.lower() in acc["name"].lower():
-                item = AccountItem(account_data=acc)
-                layout.add_widget(item)
+                layout.add_widget(AccountItem(account_data=acc))
 
 class DetailScreen(Screen):
     pass
