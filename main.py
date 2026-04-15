@@ -8,6 +8,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.label import Label
 from kivy.uix.button import Button
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.core.text import LabelBase
@@ -18,7 +19,7 @@ Window.softinput_mode = 'below_target'
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 resource_add_path(BASE_PATH)
 
-# [폰트 무결성] Kivy 엔진 자체의 기본 폰트를 강제 변경 (깨짐 원천 차단)
+# [폰트 무결성] Kivy 엔진 전체의 기본 폰트를 강제 변경하여 깨짐 방지
 FONT_NAME = 'font.ttf'
 if os.path.exists(os.path.join(BASE_PATH, FONT_NAME)):
     LabelBase.register(name="CustomFont", fn_regular=FONT_NAME)
@@ -105,7 +106,7 @@ KV = '''
             text: "데이터 저장"
             on_release: app.save_all()
 
-<AccountItem@BoxLayout>:
+<AccountItem>:
     orientation: 'horizontal'
     size_hint_y: None
     height: '70dp'
@@ -127,14 +128,61 @@ KV = '''
         text: "삭제"
         size_hint_x: 0.2
         background_color: (0.7, 0.1, 0.1, 1)
-        on_release: app.delete_account(root.account_data)
+        on_release: root.confirm_delete()
+
+<DetailScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            id: detail_label
+            text: "계정 상세 정보"
+        Button:
+            text: "돌아가기"
+            size_hint_y: None
+            height: '50dp'
+            on_release: app.root.current = 'main'
 '''
+
+class AccountItem(ButtonBehavior, BoxLayout):
+    def __init__(self, account_data, **kwargs):
+        super().__init__(**kwargs)
+        self.account_data = account_data
+        self.ids.name_label.text = account_data['name']
+
+    def on_release(self):
+        # [클릭 반응 해결] 계정 클릭 시 상세 화면으로 이동
+        app = App.get_running_app()
+        app.root.get_screen('detail').ids.detail_label.text = f"계정: {self.account_data['name']}\\n인벤토리 정보 없음"
+        app.root.current = 'detail'
+
+    def confirm_delete(self):
+        # [삭제 확인 해결] 즉시 삭제 방지 및 확인 멘트 팝업
+        content = BoxLayout(orientation='vertical', padding=15, spacing=10)
+        msg = Label(text=f"[{self.account_data['name']}] 계정을\\n정말 삭제하시겠습니까?")
+        btn_layout = BoxLayout(spacing=10, size_hint_y=None, height='50dp')
+        
+        yes_btn = Button(text="삭제", background_color=(0.8, 0.2, 0.2, 1))
+        no_btn = Button(text="취소")
+        
+        btn_layout.add_widget(yes_btn)
+        btn_layout.add_widget(no_btn)
+        content.add_widget(msg)
+        content.add_widget(btn_layout)
+        
+        popup = Popup(title="삭제 확인", content=content, size_hint=(0.8, 0.35), title_size='18sp')
+        yes_btn.bind(on_release=lambda x: self.actual_delete(popup))
+        no_btn.bind(on_release=popup.dismiss)
+        popup.open()
+
+    def actual_delete(self, popup):
+        app = App.get_running_app()
+        app.delete_account(self.account_data)
+        popup.dismiss()
 
 class MainScreen(Screen):
     def show_add_popup(self):
-        # [튕김 방지] 타이틀 바 기능을 끄고 내부 커스텀 라벨로 대체
+        # [튕김 방지] 타이틀 바 비활성화 후 내부 라벨 배치
         content = BoxLayout(orientation='vertical', padding=20, spacing=15)
-        
         title_label = Label(text="새 계정 생성", font_size='20sp', size_hint_y=None, height='40dp')
         self.txt_input = TextInput(hint_text="계정 ID 입력", multiline=False, height='60dp', size_hint_y=None)
         add_btn = Button(text="생성 완료", background_color=(0, 0.3, 0.1, 1), background_normal='', size_hint_y=None, height='55dp')
@@ -143,7 +191,6 @@ class MainScreen(Screen):
         content.add_widget(self.txt_input)
         content.add_widget(add_btn)
         
-        # separator_height=0, title_size=0 으로 튕김 원인 제거
         self.popup = Popup(title="", separator_height=0, title_size=0, content=content, size_hint=(0.85, 0.45))
         add_btn.bind(on_release=self.add_account_logic)
         self.popup.open()
@@ -163,24 +210,24 @@ class MainScreen(Screen):
         app = App.get_running_app()
         for acc in app.data["accounts"]:
             if query.lower() in acc["name"].lower():
-                from kivy.factory import Factory
-                item = Factory.AccountItem()
-                item.ids.name_label.text = acc["name"]
-                item.account_data = acc
+                item = AccountItem(account_data=acc)
                 layout.add_widget(item)
+
+class DetailScreen(Screen):
+    pass
 
 class PT1Manager(App):
     def build(self):
         self.data = DataManager.load()
         Builder.load_string(KV)
         self.sm = ScreenManager()
-        self.main_screen = MainScreen(name='main')
-        self.sm.add_widget(self.main_screen)
+        self.sm.add_widget(MainScreen(name='main'))
+        self.sm.add_widget(DetailScreen(name='detail'))
         self.refresh_main_list()
         return self.sm
 
     def refresh_main_list(self):
-        self.main_screen.filter_accounts("")
+        self.sm.get_screen('main').filter_accounts("")
 
     def delete_account(self, acc_data):
         self.data["accounts"].remove(acc_data)
