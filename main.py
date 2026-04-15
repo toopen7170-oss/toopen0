@@ -6,27 +6,30 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.textinput import TextInput
+from kivy.uix.label import Label
+from kivy.uix.button import Button
 from kivy.core.window import Window
-from kivy.clock import Clock
 from kivy.utils import platform
 from kivy.core.text import LabelBase
+from kivy.resources import resource_add_path
 
-# [전수검사] S26 울트라 프리징 방지 및 키보드 모드 설정
-Window.softinput_mode = 'pan'
-
-# 절대 경로를 통한 폰트 등록 (깨짐 방지)
+# [전수검사] S26 울트라 최적화 및 경로 설정
+Window.softinput_mode = 'below_target'
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
-FONT_PATH = os.path.join(BASE_PATH, 'font.ttf')
-if os.path.exists(FONT_PATH):
-    LabelBase.register(name="CustomFont", fn_regular=FONT_PATH)
+resource_add_path(BASE_PATH)
+
+# [폰트 무결성] Kivy 엔진 자체의 기본 폰트를 강제 변경 (깨짐 원천 차단)
+FONT_NAME = 'font.ttf'
+if os.path.exists(os.path.join(BASE_PATH, FONT_NAME)):
+    LabelBase.register(name="CustomFont", fn_regular=FONT_NAME)
+    from kivy.core.text import Label as CoreLabel
+    CoreLabel.default_font = FONT_NAME
 
 def get_data_path():
     if platform == 'android':
         from android.storage import app_storage_path
-        path = os.path.join(app_storage_path(), 'Pristontale.json')
-    else:
-        path = os.path.join(BASE_PATH, 'Pristontale.json')
-    return path
+        return os.path.join(app_storage_path(), 'Pristontale.json')
+    return os.path.join(BASE_PATH, 'Pristontale.json')
 
 class DataManager:
     @staticmethod
@@ -36,26 +39,20 @@ class DataManager:
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except Exception as e:
-                print(f"Load Error: {e}")
+            except: pass
         return {"accounts": []}
 
     @staticmethod
     def save(data):
-        path = get_data_path()
         try:
-            with open(path, 'w', encoding='utf-8') as f:
+            with open(get_data_path(), 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-            return True
-        except Exception as e:
-            print(f"Save Error: {e}")
-            return False
+        except: pass
 
 KV = '''
 <StyledButton@Button>:
-    font_name: "CustomFont" if app.font_exists else "Roboto"
     background_normal: ''
-    background_color: (0, 0.3, 0.1, 1)  # 사진 속 진한 초록색
+    background_color: (0, 0.3, 0.1, 1)
     size_hint_y: None
     height: '55dp'
 
@@ -72,7 +69,6 @@ KV = '''
         
         Label:
             text: "PristonTale"
-            font_name: "CustomFont" if app.font_exists else "Roboto"
             font_size: '32sp'
             size_hint_y: None
             height: '70dp'
@@ -85,14 +81,12 @@ KV = '''
                 id: search_input
                 hint_text: "전체 검색(계정, 아이템 등)"
                 multiline: False
-                font_name: "CustomFont" if app.font_exists else "Roboto"
                 background_color: (0.1, 0.1, 0.1, 0.8)
                 foreground_color: (1, 1, 1, 1)
                 on_text: root.filter_accounts(self.text)
             Button:
                 text: "검색"
                 size_hint_x: 0.2
-                background_color: (0.05, 0.05, 0.15, 1)
 
         StyledButton:
             text: "+ 새 계정 만들기"
@@ -126,7 +120,6 @@ KV = '''
     Label:
         id: name_label
         text: ""
-        font_name: "CustomFont" if app.font_exists else "Roboto"
         halign: 'left'
         valign: 'middle'
         text_size: self.size
@@ -139,27 +132,19 @@ KV = '''
 
 class MainScreen(Screen):
     def show_add_popup(self):
-        # 튕김 방지: 키보드 강제 해제 후 팝업 생성
-        Window.release_all_keyboards()
-        content = BoxLayout(orientation='vertical', padding=20, spacing=20)
-        self.txt_input = TextInput(
-            hint_text="생성할 계정 ID", 
-            multiline=False, 
-            height='65dp', 
-            size_hint_y=None,
-            font_name="CustomFont" if App.get_running_app().font_exists else "Roboto"
-        )
-        add_btn = Button(
-            text="생성 완료", 
-            background_color=(0, 0.3, 0.1, 1), 
-            background_normal='', 
-            size_hint_y=None, 
-            height='55dp'
-        )
+        # [튕김 방지] 타이틀 바 기능을 끄고 내부 커스텀 라벨로 대체
+        content = BoxLayout(orientation='vertical', padding=20, spacing=15)
+        
+        title_label = Label(text="새 계정 생성", font_size='20sp', size_hint_y=None, height='40dp')
+        self.txt_input = TextInput(hint_text="계정 ID 입력", multiline=False, height='60dp', size_hint_y=None)
+        add_btn = Button(text="생성 완료", background_color=(0, 0.3, 0.1, 1), background_normal='', size_hint_y=None, height='55dp')
+        
+        content.add_widget(title_label)
         content.add_widget(self.txt_input)
         content.add_widget(add_btn)
         
-        self.popup = Popup(title="계정 생성", content=content, size_hint=(0.85, 0.45))
+        # separator_height=0, title_size=0 으로 튕김 원인 제거
+        self.popup = Popup(title="", separator_height=0, title_size=0, content=content, size_hint=(0.85, 0.45))
         add_btn.bind(on_release=self.add_account_logic)
         self.popup.open()
 
@@ -170,8 +155,6 @@ class MainScreen(Screen):
             app.data["accounts"].append({"name": name, "inventory": []})
             app.refresh_main_list()
             app.save_all()
-            # 자동 스크롤 하단 이동
-            Clock.schedule_once(lambda dt: setattr(self.ids.scroll_view, 'scroll_y', 0), 0.1)
             self.popup.dismiss()
 
     def filter_accounts(self, query):
@@ -188,7 +171,6 @@ class MainScreen(Screen):
 
 class PT1Manager(App):
     def build(self):
-        self.font_exists = os.path.exists(FONT_PATH)
         self.data = DataManager.load()
         Builder.load_string(KV)
         self.sm = ScreenManager()
@@ -206,11 +188,7 @@ class PT1Manager(App):
         self.save_all()
 
     def save_all(self):
-        if DataManager.save(self.data):
-            print("Save Success")
+        DataManager.save(self.data)
 
 if __name__ == '__main__':
-    if platform == 'android':
-        from android.permissions import request_permissions, Permission
-        request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
     PT1Manager().run()
