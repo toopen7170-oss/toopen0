@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    # [고정] toopen7170-oss/toopen0 저장소 환경 최적화
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,13 +22,15 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-          # SDK 경로 강제 매핑
+          # [방어] SDK 경로 강제 매핑
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
           
-          # 라이선스 자동 승인 (Broken pipe 방어)
-          echo "y" | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+          # [방어] 37 버전 충돌 방지 및 33 버전 빌드 도구 강제 설치
+          touch ~/.android/repositories.cfg
+          yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+          sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;33.0.0" "platforms;android-33"
 
-          # [방어] NoSectionError를 방지하기 위해 추가 환경 변수 없이 빌드 실행
+          # [방어] NoSectionError 방지를 위해 불필요한 환경변수 없이 실행
           buildozer -v android debug
         shell: bash
