@@ -21,6 +21,7 @@ jobs:
       - name: Build Setup
         run: |
           sudo apt update
+          # 무료 오픈소스 라이브러리 전수 설치
           sudo apt install -y git zip unzip autoconf libtool pkg-config zlib1g-dev \
             libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev \
             build-essential python3-dev ant lld libsqlite3-dev
@@ -28,11 +29,11 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-          # [핵심 교정] Buildozer가 찾는 옛날 경로에 최신 SDK 링크 생성
+          # [무료 교정] 서버에 이미 깔려있는 무료 SDK를 Buildozer가 인식하도록 링크 생성
           sudo mkdir -p /usr/local/lib/android/sdk/tools/bin
           sudo ln -s /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager /usr/local/lib/android/sdk/tools/bin/sdkmanager || true
           
-          # 라이선스 자동 승인
+          # 무료 라이선스 자동 승인
           yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
           export BUILDOZER_ALLOW_KIVY_MASTER=1
