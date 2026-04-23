@@ -10,7 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# [환경 방어] 갤럭시 S26 울트라 최적화
+# [환경 방어] 갤럭시 S26 울트라 최적화 및 폰트 설정
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -40,9 +40,8 @@ class SInput(TextInput):
         self.multiline, self.size_hint_y, self.height = False, None, "55dp"
         self.halign = "center"
 
-# --- 화면 로직 (절대 규칙: 6개 창 고정) ---
+# --- 화면 로직 (절대 규칙: 총 6개 창) ---
 
-# 1. 계정생성창
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self, q=""):
@@ -51,17 +50,17 @@ class MainScreen(Screen):
         for aid in data.keys():
             if q.lower() in aid.lower():
                 row = BoxLayout(size_hint_y=None, height="65dp", spacing=10)
-                btn = Button(text=f"ID: {aid}", font_name="KFont", background_color=(0, 0.5, 0.2, 1))
+                btn = Button(text=f"계정: {aid}", font_name="KFont", background_color=(0, 0.5, 0.2, 1))
                 btn.bind(on_release=lambda x, a=aid: self.go_next(a))
-                del_btn = Button(text="삭제", size_hint_x=0.25, background_color=(0.8, 0.1, 0.1, 1), font_name="KFont")
+                del_btn = Button(text="삭제", size_hint_x=0.2, background_color=(0.8, 0.1, 0.1, 1), font_name="KFont")
                 del_btn.bind(on_release=lambda x, a=aid: App.get_running_app().confirm_pop(f"[{a}] 삭제?", lambda: self.do_del(a)))
                 row.add_widget(btn); row.add_widget(del_btn); self.ids.acc_list.add_widget(row)
     def go_next(self, aid): App.get_running_app().cur_acc = aid; self.manager.current = 'char_select'
     def do_del(self, aid): app = App.get_running_app(); del app.user_data["accounts"][aid]; app.save_data(); self.refresh()
     def show_add(self):
         c = BoxLayout(orientation='vertical', padding=15, spacing=15)
-        self.inp = SInput(hint_text="계정 ID")
-        btn = Button(text="저장", font_name="KFont", background_color=(0, 0.5, 0.2, 1), size_hint_y=None, height="55dp")
+        self.inp = SInput(hint_text="새 계정 ID")
+        btn = Button(text="생성", font_name="KFont", background_color=(0, 0.5, 0.2, 1), size_hint_y=None, height="55dp")
         c.add_widget(self.inp); c.add_widget(btn)
         pop = Popup(title="계정 추가", content=c, size_hint=(0.85, 0.4))
         btn.bind(on_release=lambda x: self.save_acc(pop)); pop.open()
@@ -72,7 +71,6 @@ class MainScreen(Screen):
             app.user_data["accounts"][aid] = {str(i): {"info":{}, "equip":{}, "inv":[], "pics":[]} for i in range(1, 7)}
             app.save_data(); self.refresh(); pop.dismiss()
 
-# 2. 케릭선택창
 class CharSelectScreen(Screen):
     def on_enter(self):
         self.ids.grid.clear_widgets()
@@ -84,8 +82,10 @@ class CharSelectScreen(Screen):
             self.ids.grid.add_widget(btn)
     def go_slot(self, i): App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
-# 3. 케릭정보창 (세부목록 18개)
+class SlotMenuScreen(Screen): pass
+
 class InfoScreen(Screen):
+    # 절대 규칙: 세부 목록 18개 고정
     fields = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -101,8 +101,8 @@ class InfoScreen(Screen):
         app.user_data["accounts"][app.cur_acc][app.cur_slot]["info"][f] = v
         app.save_data()
 
-# 4. 케릭장비창 (세부목록 11개)
 class EquipScreen(Screen):
+    # 절대 규칙: 세부 목록 11개 고정
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -116,9 +116,6 @@ class EquipScreen(Screen):
         app = App.get_running_app()
         app.user_data["accounts"][app.cur_acc][app.cur_slot]["equip"][f] = v
         app.save_data()
-
-# 5. 인벤토리창, 6. 사진선택창 (메뉴창으로 통합 관리)
-class SlotMenuScreen(Screen): pass
 
 KV = '''
 ScreenManager:
@@ -140,16 +137,16 @@ ScreenManager:
         SInput: hint_text: "계정 검색..."; on_text: root.refresh(self.text)
         ScrollView:
             BoxLayout: id: acc_list; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height; spacing: 8
-        Button: text: "+ 계정 추가"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; background_color: (0, 0.6, 0.3, 1); on_release: root.show_add()
+        Button: text: "+ 새 계정 생성"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; background_color: (0, 0.6, 0.3, 1); on_release: root.show_add()
 
 <CharSelectScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
         spacing: 20
-        Label: text: "캐릭터 선택"; font_name: 'KFont'; size_hint_y: None; height: '60dp'
+        Label: text: "캐릭터 슬롯"; font_name: 'KFont'; size_hint_y: None; height: '60dp'
         GridLayout: id: grid; cols: 2; spacing: 15
-        Button: text: "뒤로"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; on_release: app.root.current = 'main'
+        Button: text: "이전 단계"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; on_release: app.root.current = 'main'
 
 <SlotMenuScreen>:
     BoxLayout:
@@ -160,7 +157,7 @@ ScreenManager:
         Button: text: "케릭장비창"; font_name: 'KFont'; on_release: app.root.current = 'equip'
         Button: text: "인벤토리창"; font_name: 'KFont'
         Button: text: "사진선택창"; font_name: 'KFont'
-        Button: text: "이전으로"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; background_color: (0.5, 0.5, 0.5, 1); on_release: app.root.current = 'char_select'
+        Button: text: "뒤로가기"; font_name: 'KFont'; size_hint_y: None; height: '65dp'; background_color: (0.5, 0.5, 0.5, 1); on_release: app.root.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>:
     BoxLayout:
