@@ -10,7 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# [방어] S26 울트라 자판 최적화
+# [환경 방어] 갤럭시 S26 울트라 최적화
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -40,7 +40,7 @@ class SInput(TextInput):
         self.multiline, self.size_hint_y, self.height = False, None, "55dp"
         self.halign = "center"
 
-# --- 화면 로직 (절대 규칙 고정) ---
+# --- 화면 로직 (절대 규칙 준수) ---
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self, q=""):
@@ -84,6 +84,7 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
+    # [절대 규칙] 18개 세부 목록 고정
     fields = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -101,6 +102,7 @@ class InfoScreen(Screen):
         app.save_data()
 
 class EquipScreen(Screen):
+    # [절대 규칙] 11개 세부 목록 고정
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self):
         self.ids.cont.clear_widgets()
