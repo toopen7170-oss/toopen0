@@ -12,6 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17' # 최신 호환성을 위해 17 사용
+
       - name: Build Setup
         run: |
           sudo apt update
@@ -22,15 +28,13 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-          # [환경오류검사 완료] sdkmanager 강제 주입 로직
-          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
-          cp -a $ANDROID_SDK_ROOT/cmdline-tools/latest/. ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/ || true
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
-          cp $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
+          # [환경오류 해결] Buildozer 내부 SDK가 아닌 서버 공인 SDK 사용 준비
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
           
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
-          echo -e "8933bad161af9178b11909454ede1222ad145220\nd56f5187479451eabf01fb74301353a168261936" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
-
+          # 라이선스 자동 승인
+          yes | sdkmanager --licenses || true
+          
           export BUILDOZER_ALLOW_KIVY_MASTER=1
           buildozer -v android debug
         shell: bash
@@ -38,5 +42,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PristonTale-Final
+          name: PristonTale-Final-S26
           path: bin/*.apk
