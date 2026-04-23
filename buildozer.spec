@@ -6,7 +6,7 @@ source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt,json
 version = 1.0
 
-requirements = python3,kivy==2.3.0,pillow,pyjnius
+requirements = python3,kivy==2.3.1,pillow,pyjnius
 
 orientation = portrait
 fullscreen = 0
@@ -16,6 +16,5 @@ android.api = 33
 android.minapi = 21
 
 [buildozer]
-# [방어] 서버 오류 방지를 위한 세션 직접 명시
 log_level = 2
 warn_on_root = 0
