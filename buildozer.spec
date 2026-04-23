@@ -11,10 +11,7 @@ requirements = python3,kivy==2.3.0,pillow,pyjnius
 orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
-
-# [방어] 최신 안드로이드 사진 접근 권한 추가
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES
-
 android.api = 33
 android.minapi = 21
 icon.filename = icon.png
