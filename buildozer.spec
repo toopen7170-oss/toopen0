@@ -5,9 +5,7 @@ package.domain = org.toopen8
 source.dir = .
 source.include_exts = py,png,jpg,jpeg,ttf,txt,json
 version = 1.0
-
 requirements = python3,kivy==2.3.1,pillow,pyjnius
-
 orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
