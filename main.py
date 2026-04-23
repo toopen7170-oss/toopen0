@@ -10,7 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# [환경 방어] S26 울트라 자판 간섭 방지 및 폰트 무결성 검사
+# [방어] S26 울트라 자판 최적화
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -20,30 +20,27 @@ class DataStore:
     FILE = "PristonTale.json"
     @staticmethod
     def load():
-        # [방어] 파일 읽기 실패 시 데이터 유실 방지 로직
         try:
             if os.path.exists(DataStore.FILE):
                 with open(DataStore.FILE, "r", encoding="utf-8") as f:
                     return json.load(f)
-        except Exception: pass
+        except: pass
         return {"accounts": {}}
-
     @staticmethod
     def save(data):
-        # [방어] 비정상적인 데이터 저장 차단
         try:
             with open(DataStore.FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
-        except Exception: pass
+        except: pass
 
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.font_name = "KFont" if os.path.exists(FONT_FILE) else None
         self.multiline, self.size_hint_y, self.height = False, None, "55dp"
-        self.halign = "center" # [규칙] 글자 중앙 고정
+        self.halign = "center"
 
-# --- 메인 로직 (절대 규칙 6개 창 및 세부 목록 고정) ---
+# --- 화면 로직 (절대 규칙 고정) ---
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self, q=""):
@@ -62,7 +59,7 @@ class MainScreen(Screen):
     def show_add(self):
         c = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.inp = SInput(hint_text="새 계정 ID 입력")
-        btn = Button(text="계정 저장", font_name="KFont", background_color=(0, 0.5, 0.2, 1), size_hint_y=None, height="55dp")
+        btn = Button(text="저장", font_name="KFont", background_color=(0, 0.5, 0.2, 1), size_hint_y=None, height="55dp")
         c.add_widget(self.inp); c.add_widget(btn)
         pop = Popup(title="계정 추가", content=c, size_hint=(0.85, 0.4))
         btn.bind(on_release=lambda x: self.save_acc(pop)); pop.open()
@@ -87,7 +84,6 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # [절대 규칙] 케릭정보창 18개 세부 목록 고정
     fields = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -98,14 +94,13 @@ class InfoScreen(Screen):
                 row.add_widget(Label(text=f, font_name="KFont", size_hint_x=0.35))
                 inp = SInput(text=data.get(f, "")); inp.bind(text=lambda inst, v, f=f: self.save(f, v))
                 row.add_widget(inp); self.ids.cont.add_widget(row)
-            self.ids.cont.add_widget(Label(size_hint_y=None, height="15dp")) # 간격용
+            self.ids.cont.add_widget(Label(size_hint_y=None, height="15dp"))
     def save(self, f, v):
         app = App.get_running_app()
         app.user_data["accounts"][app.cur_acc][app.cur_slot]["info"][f] = v
         app.save_data()
 
 class EquipScreen(Screen):
-    # [절대 규칙] 케릭장비창 11개 세부 목록 고정
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self):
         self.ids.cont.clear_widgets()
