@@ -22,20 +22,20 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-          # [방어] 폴더 생성 및 라이선스 강제 승인
+          # [방어] 폴더 생성
           mkdir -p ~/.android
           touch ~/.android/repositories.cfg
 
           export ANDROID_HOME=$ANDROID_SDK_ROOT
           export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
           
-          # [핵심 방어] 모든 버전의 라이선스를 한 번에 승인 (yes를 무한히 보냄)
-          yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+          # [핵심 방어] Broken pipe 방지를 위해 딱 필요한 만큼만 승인
+          printf "y\ny\ny\ny\ny\ny\ny\n" | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
           
-          # [핵심 방어] 33 버전 빌드 도구를 수동으로 미리 꽂아넣기
-          yes | sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;33.0.0" "platforms;android-33"
+          # [방어] 필요한 도구만 정밀 타격 설치
+          sdkmanager --sdk_root=$ANDROID_HOME "platform-tools" "build-tools;33.0.0" "platforms;android-33"
 
-          # [방어] AIDL을 못 찾는 오류 방지를 위한 환경 변수 고정
+          # [방어] AIDL 경로 및 환경 변수 고정
           export BUILDOZER_ALLOW_KIVY_MASTER=1
           buildozer -v android debug
         shell: bash
