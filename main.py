@@ -10,7 +10,7 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# [S26 울트라 대응] 입력창 자동 리프트업
+# [갤럭시 S26 울트라 최적화]
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 if os.path.exists(FONT_FILE):
@@ -42,11 +42,11 @@ class SInput(TextInput):
         self.multiline = False
         self.size_hint_y = None
         self.height = "60dp"
-        self.halign = "center" # 중앙 정렬
+        self.halign = "center"
         self.padding_y = [self.height/2 - (self.line_height/2), 0]
         self.write_tab = False
 
-# --- 제1원칙: 7개 화면 구성 ---
+# --- 제1원칙: 7개 화면 구성 (절대 수정 불가) ---
 
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
@@ -99,7 +99,7 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # 절대 규칙: 세부 목록 18개
+    # 절대 규칙: 세부 목록 18개 그룹화
     fields = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -112,10 +112,10 @@ class InfoScreen(Screen):
                 inp.bind(text=lambda inst, v, f=f: self.auto_save(f, v))
                 row.add_widget(inp)
                 del_b = Button(text="X", size_hint_x=0.15, background_color=(0.9, 0.1, 0.1, 1))
-                del_b.bind(on_release=lambda x, i=inp: App.get_running_app().confirm_pop("해당 칸을 삭제하시겠습니까?", lambda: self.clear_field(i)))
+                del_b.bind(on_release=lambda x, i=inp: App.get_running_app().confirm_pop("삭제하시겠습니까?", lambda: self.clear_field(i)))
                 row.add_widget(del_b)
                 self.ids.cont.add_widget(row)
-            self.ids.cont.add_widget(Label(size_hint_y=None, height="20dp")) # 시각적 간격
+            self.ids.cont.add_widget(Label(size_hint_y=None, height="20dp")) # 시각적 공백
     def auto_save(self, f, v):
         app = App.get_running_app()
         app.user_data["accounts"][app.cur_acc][app.cur_slot]["info"][f] = v
@@ -135,7 +135,7 @@ class EquipScreen(Screen):
             inp.bind(text=lambda inst, v, f=f: self.auto_save(f, v))
             row.add_widget(inp)
             del_b = Button(text="X", size_hint_x=0.15, background_color=(0.9, 0.1, 0.1, 1))
-            del_b.bind(on_release=lambda x, i=inp: App.get_running_app().confirm_pop("해당 칸을 삭제하시겠습니까?", lambda: self.clear_field(i)))
+            del_b.bind(on_release=lambda x, i=inp: App.get_running_app().confirm_pop("삭제하시겠습니까?", lambda: self.clear_field(i)))
             row.add_widget(del_b)
             self.ids.cont.add_widget(row)
     def auto_save(self, f, v):
@@ -150,7 +150,6 @@ class ListEditScreen(Screen):
     def refresh(self):
         self.ids.cont.clear_widgets()
         app = App.get_running_app()
-        # [방어 코드] 데이터 구조 유효성 검사
         acc_slot = app.user_data["accounts"][app.cur_acc][app.cur_slot]
         if self.mode not in acc_slot: acc_slot[self.mode] = []
         items = acc_slot[self.mode]
@@ -159,7 +158,7 @@ class ListEditScreen(Screen):
             btn = Button(text=val[:25], font_name="KFont", halign="center")
             btn.bind(on_release=lambda x, i=idx, v=val: self.show_edit(i, v))
             del_b = Button(text="삭제", size_hint_x=0.2, background_color=(0.9, 0.1, 0.1, 1), font_name="KFont")
-            del_b.bind(on_release=lambda x, i=idx: app.confirm_pop("해당 줄을 삭제하시겠습니까?", lambda: self.do_del(i)))
+            del_b.bind(on_release=lambda x, i=idx: app.confirm_pop("삭제하시겠습니까?", lambda: self.do_del(i)))
             row.add_widget(btn); row.add_widget(del_b); self.ids.cont.add_widget(row)
     def show_edit(self, idx, val):
         c = BoxLayout(orientation='vertical', padding=10, spacing=10)
@@ -178,12 +177,10 @@ class ListEditScreen(Screen):
         app.save_data(); self.refresh()
     def add_line(self):
         app = App.get_running_app()
-        app.user_data["accounts"][app.cur_acc][app.cur_slot][self.mode].append("새 항목 입력")
+        app.user_data["accounts"][app.cur_acc][app.cur_slot][self.mode].append("새 항목")
         app.save_data(); self.refresh()
 
-class PhotoScreen(Screen):
-    def on_enter(self): pass
-    def add_photo(self): pass # 권한 연동용
+class PhotoScreen(Screen): pass
 
 KV = '''
 ScreenManager:
@@ -204,7 +201,7 @@ ScreenManager:
         canvas.before:
             Rectangle: source: 'bg.png'; pos: self.pos; size: self.size
         Label: text: "PristonTale"; font_size: '35sp'; font_name: 'KFont'; size_hint_y: None; height: '80dp'
-        SInput: hint_text: "계정 전체 검색..."; on_text: root.refresh(self.text)
+        SInput: hint_text: "계정 검색..."; on_text: root.refresh(self.text)
         ScrollView:
             BoxLayout: id: acc_list; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height; spacing: 10
         Button: text: "+ 계정 생성"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; background_color: (0, 0.6, 0.3, 1); on_release: root.show_add()
@@ -214,7 +211,7 @@ ScreenManager:
         orientation: 'vertical'
         padding: 20
         spacing: 20
-        Label: text: "캐릭터 선택 (6슬롯)"; font_name: 'KFont'; size_hint_y: None; height: '60dp'
+        Label: text: "캐릭터 선택"; font_name: 'KFont'; size_hint_y: None; height: '60dp'
         GridLayout: id: grid; cols: 2; spacing: 20
         Button: text: "뒤로가기"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; on_release: app.root.current = 'main'
 
@@ -236,7 +233,7 @@ ScreenManager:
         padding: 10
         ScrollView:
             BoxLayout: id: cont; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height
-        Button: text: "자동저장 완료 및 뒤로"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; on_release: app.root.current = 'slot_menu'
+        Button: text: "완료 및 뒤로"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; on_release: app.root.current = 'slot_menu'
 
 <ListEditScreen>:
     BoxLayout:
@@ -253,9 +250,7 @@ ScreenManager:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
-        Label: text: "사진 선택창"; font_name: 'KFont'; size_hint_y: None; height: '60dp'
-        BoxLayout: id: photo_grid; orientation: 'vertical'
-        Button: text: "사진 업로드 (준비중)"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; on_release: root.add_photo()
+        Label: text: "사진 선택창"; font_name: 'KFont'
         Button: text: "뒤로"; font_name: 'KFont'; size_hint_y: None; height: '70dp'; on_release: app.root.current = 'slot_menu'
 '''
 
