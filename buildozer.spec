@@ -12,10 +12,14 @@ orientation = portrait
 fullscreen = 0
 android.archs = arm64-v8a
 
-# 사진 및 미디어 권한 추가
-android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES, READ_MEDIA_VIDEO
+# [방어] 최신 안드로이드 사진 접근 권한 추가
+android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES
 
 android.api = 33
 android.minapi = 21
 icon.filename = icon.png
 presplash.filename = bg.png
+
+[buildozer]
+log_level = 2
+warn_on_root = 0
