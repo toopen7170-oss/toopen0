@@ -14,9 +14,8 @@ android.archs = arm64-v8a
 android.permissions = READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, READ_MEDIA_IMAGES
 android.api = 33
 android.minapi = 21
-icon.filename = icon.png
-presplash.filename = bg.png
 
 [buildozer]
+# [방어] 섹션 오류를 막기 위해 파일 내부에 설정을 직접 명시함
 log_level = 2
 warn_on_root = 0
