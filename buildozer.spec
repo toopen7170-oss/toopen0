@@ -16,6 +16,6 @@ android.api = 33
 android.minapi = 21
 
 [buildozer]
-# [방어] 섹션 오류를 막기 위해 파일 내부에 설정을 직접 명시함
+# [방어] 서버 오류 방지를 위한 세션 직접 명시
 log_level = 2
 warn_on_root = 0
