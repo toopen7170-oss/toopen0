@@ -16,7 +16,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17' # 최신 호환성을 위해 17 사용
+          java-version: '17'
 
       - name: Build Setup
         run: |
@@ -28,12 +28,12 @@ jobs:
           pip install --upgrade pip
           pip install "Cython<3.0" buildozer kivy pillow pyjnius
 
-          # [환경오류 해결] Buildozer 내부 SDK가 아닌 서버 공인 SDK 사용 준비
-          export ANDROID_HOME=$ANDROID_SDK_ROOT
-          export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools
+          # [핵심 교정] Buildozer가 찾는 옛날 경로에 최신 SDK 링크 생성
+          sudo mkdir -p /usr/local/lib/android/sdk/tools/bin
+          sudo ln -s /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager /usr/local/lib/android/sdk/tools/bin/sdkmanager || true
           
           # 라이선스 자동 승인
-          yes | sdkmanager --licenses || true
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
           export BUILDOZER_ALLOW_KIVY_MASTER=1
           buildozer -v android debug
