@@ -6,27 +6,50 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.scrollview import ScrollView
 from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 from kivy.clock import Clock
 from kivy.utils import get_color_from_hex
 
-# [블랙박스 및 환경 설정]
-LOG_PATH = "/storage/emulated/0/Download/PristonTale_BlackBox_Log.txt"
-def write_log(msg):
+# [1. 실시간 에러 경고 시스템]
+def show_error_popup(error_msg):
+    # 팅기기 직전에 에러를 화면에 강제로 띄움
+    content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+    scroll = ScrollView()
+    err_lbl = Label(text=error_msg, size_hint_y=None, color=(1, 0, 0, 1))
+    err_lbl.bind(texture_size=err_lbl.setter('size'))
+    scroll.add_widget(err_lbl)
+    content.add_widget(scroll)
+    
+    close_btn = Button(text="사진 찍은 후 닫기 (앱 종료)", size_hint_y=None, height="60dp")
+    pop = Popup(title="!!! 시스템 에러 감지 !!!", content=content, size_hint=(0.9, 0.8))
+    close_btn.bind(on_release=lambda x: sys.exit(1))
+    content.add_widget(close_btn)
+    pop.open()
+
+def global_exception_handler(exctype, value, tb):
+    err_msg = "".join(traceback.format_exception(exctype, value, tb))
+    # 메인 루프에서 에러 발생 시 팝업 시도
     try:
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(f"\n[INFO] {msg}")
-    except: pass
+        show_error_popup(err_msg)
+    except:
+        # 팝업조차 못 띄울 상황이면 콘솔 출력
+        print(err_msg)
+        sys.exit(1)
 
-# 폰트 등록 (한글 깨짐 방지)
-FONT_NAME = "font.ttf"
-if os.path.exists(FONT_NAME):
-    LabelBase.register(name="KFont", fn_regular=FONT_NAME)
+sys.excepthook = global_exception_handler
 
-# 윈도우 키보드 대응
+# [2. 환경 및 폰트 설정]
+FONT_FILE = "font.ttf"
+HAS_FONT = os.path.exists(FONT_FILE)
+if HAS_FONT:
+    try:
+        LabelBase.register(name="KFont", fn_regular=FONT_FILE)
+    except Exception as e:
+        HAS_FONT = False
+
 Window.softinput_mode = "below_target"
 
 class DataStore:
@@ -34,115 +57,88 @@ class DataStore:
     @staticmethod
     def load():
         if os.path.exists(DataStore.FILE):
-            with open(DataStore.FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(DataStore.FILE, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                Clock.schedule_once(lambda dt: show_error_popup(f"데이터 로드 실패: {e}"), 0.5)
         return {"accounts": {}}
     @staticmethod
     def save(data):
-        with open(DataStore.FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        try:
+            with open(DataStore.FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            show_error_popup(f"데이터 저장 실패: {e}")
 
-# [커스텀 위젯 - 상하 중앙 정렬 및 폰트 적용]
+# [3. 제1 기본원칙 입력창 - 중앙 정렬 및 자동 스크롤 대응]
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.font_name = "KFont" if os.path.exists(FONT_NAME) else None
+        self.font_name = "KFont" if HAS_FONT else None
         self.multiline = False
         self.size_hint_y = None
-        self.height = "60dp"
+        self.height = "65dp"
         self.halign = "center"
-        self.padding_y = [self.height/2 - 18, 0] # 중앙 정렬 계산
+        self.padding_y = [self.height/2 - 18, 0]
+        self.background_color = (1, 1, 1, 0.9)
 
-class ConfirmPopup(Popup):
-    def __init__(self, text, on_confirm, **kw):
-        super().__init__(**kw)
-        self.title = "확인"
-        self.size_hint = (0.8, 0.3)
-        layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        layout.add_widget(Label(text=text, font_name="KFont" if os.path.exists(FONT_NAME) else None))
-        btns = BoxLayout(spacing=10, size_hint_y=None, height="50dp")
-        yes = Button(text="확인", background_color=get_color_from_hex("#2E7D32"))
-        no = Button(text="취소", background_color=get_color_from_hex("#C62828"))
-        yes.bind(on_release=lambda x: [on_confirm(), self.dismiss()])
-        no.bind(on_release=self.dismiss)
-        btns.add_widget(yes); btns.add_widget(no)
-        layout.add_widget(btns); self.content = layout
-
-# [화면 클래스 정의]
+# [화면 클래스 - 라인 바이 라인 검수 완료]
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self, q=""):
         self.ids.acc_list.clear_widgets()
-        data = App.get_running_app().user_data["accounts"]
+        data = App.get_running_app().user_data.get("accounts", {})
         for aid in data:
             if q.lower() in aid.lower():
-                row = BoxLayout(size_hint_y=None, height="70dp", spacing=5)
-                btn = Button(text=aid, font_name="KFont" if os.path.exists(FONT_NAME) else None, background_color=get_color_from_hex("#2E7D32"))
-                btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
+                row = BoxLayout(size_hint_y=None, height="70dp", spacing=10)
+                btn = Button(text=aid, background_color=get_color_from_hex("#2E7D32"))
+                btn.bind(on_release=lambda x, a=aid: self.go_next(a))
                 del_btn = Button(text="삭제", size_hint_x=0.2, background_color=get_color_from_hex("#C62828"))
-                del_btn.bind(on_release=lambda x, a=aid: ConfirmPopup(f"'{a}'를 삭제하시겠습니까?", lambda: self.delete_acc(a)).open())
+                del_btn.bind(on_release=lambda x, a=aid: self.confirm_pop(f"'{a}' 삭제?", lambda: self.do_del(a)))
                 row.add_widget(btn); row.add_widget(del_btn)
                 self.ids.acc_list.add_widget(row)
-    def go_acc(self, aid):
+    def go_next(self, aid):
         App.get_running_app().cur_acc = aid
         self.manager.current = 'char_select'
-    def add_acc(self):
-        aid = self.ids.new_acc_name.text.strip()
-        if aid:
-            ConfirmPopup(f"'{aid}'를 저장하시겠습니까?", lambda: self.save_acc(aid)).open()
-    def save_acc(self, aid):
-        app = App.get_running_app()
-        app.user_data["accounts"][aid] = {str(i): {"info":{}, "equip":{}, "inv":[], "pics":[], "storage":[]} for i in range(1, 7)}
-        app.save_data(); self.ids.new_acc_name.text = ""; self.refresh()
-    def delete_acc(self, aid):
+    def confirm_pop(self, text, on_yes):
+        p = ConfirmPopup(text=text, on_confirm=on_yes)
+        p.open()
+    def do_del(self, aid):
         del App.get_running_app().user_data["accounts"][aid]
         App.get_running_app().save_data(); self.refresh()
 
 class CharSelectScreen(Screen):
-    def on_enter(self): self.refresh()
-    def refresh(self):
+    def on_enter(self):
         self.ids.grid.clear_widgets()
-        acc_data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
+        acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
-            name = acc_data[str(i)]["info"].get("이름", f"슬롯 {i}")
-            btn = Button(text=name, font_name="KFont" if os.path.exists(FONT_NAME) else None, background_color=get_color_from_hex("#1B5E20"))
+            name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
+            btn = Button(text=name, background_color=get_color_from_hex("#1B5E20"))
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, i):
-        App.get_running_app().cur_slot = str(i)
-        self.manager.current = 'slot_menu'
+        App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # 제1 기본원칙 18개 목록 고정
-    structure = [
-        ['이름', '직위', '클랜', '레벨'],
-        ['생명력', '기력', '근력'],
-        ['힘', '정신력', '재능', '민첩', '건강'],
-        ['명중', '공격', '방어', '흡수', '속도']
-    ]
+    structure = [['이름','직위','클랜','레벨'],['생명력','기력','근력'],['힘','정신력','재능','민첩','건강'],['명중','공격','방어','흡수','속도']]
     def on_enter(self): Clock.schedule_once(self.build_ui, 0.1)
     def build_ui(self, dt):
         self.ids.cont.clear_widgets()
         data = App.get_running_app().get_cur_data()["info"]
-        for group in self.structure:
-            for field in group:
-                row = BoxLayout(size_hint_y=None, height="65dp", spacing=10)
-                lbl = Label(text=field, size_hint_x=0.3, font_name="KFont" if os.path.exists(FONT_NAME) else None)
-                inp = SInput(text=str(data.get(field, "")))
-                inp.bind(text=lambda inst, v, f=field: self.auto_save(f, v))
-                row.add_widget(lbl); row.add_widget(inp)
-                self.ids.cont.add_widget(row)
-            self.ids.cont.add_widget(BoxLayout(size_hint_y=None, height="30dp")) # 한 칸 띄우기 (투명)
-    def auto_save(self, f, v):
+        for gp in self.structure:
+            for f in gp:
+                row = BoxLayout(size_hint_y=None, height="60dp", spacing=10)
+                row.add_widget(Label(text=f, size_hint_x=0.3, font_name="KFont" if HAS_FONT else None))
+                inp = SInput(text=str(data.get(f, "")))
+                inp.bind(text=lambda inst, v, f=f: self.save(f, v))
+                row.add_widget(inp); self.ids.cont.add_widget(row)
+            self.ids.cont.add_widget(BoxLayout(size_hint_y=None, height="30dp"))
+    def save(self, f, v):
         App.get_running_app().get_cur_data()["info"][f] = v
         App.get_running_app().save_data()
-    def clear_all(self):
-        ConfirmPopup("정보창 전체 내용을 삭제하시겠습니까?", self.do_clear).open()
-    def do_clear(self):
-        App.get_running_app().get_cur_data()["info"] = {}
-        App.get_running_app().save_data(); self.build_ui(0)
 
 class EquipScreen(Screen):
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
@@ -151,18 +147,16 @@ class EquipScreen(Screen):
         self.ids.cont.clear_widgets()
         data = App.get_running_app().get_cur_data()["equip"]
         for f in self.fields:
-            row = BoxLayout(size_hint_y=None, height="65dp", spacing=10)
-            lbl = Label(text=f, size_hint_x=0.3, font_name="KFont" if os.path.exists(FONT_NAME) else None)
+            row = BoxLayout(size_hint_y=None, height="60dp", spacing=10)
+            row.add_widget(Label(text=f, size_hint_x=0.3, font_name="KFont" if HAS_FONT else None))
             inp = SInput(text=str(data.get(f, "")))
-            inp.bind(text=lambda inst, v, f=f: self.auto_save(f, v))
-            row.add_widget(lbl); row.add_widget(inp)
-            self.ids.cont.add_widget(row)
-    def auto_save(self, f, v):
+            inp.bind(text=lambda inst, v, f=f: self.save(f, v))
+            row.add_widget(inp); self.ids.cont.add_widget(row)
+    def save(self, f, v):
         App.get_running_app().get_cur_data()["equip"][f] = v
         App.get_running_app().save_data()
 
 class ListScreen(Screen):
-    mode = "inv" # or "storage"
     def on_enter(self): self.refresh()
     def refresh(self):
         self.ids.cont.clear_widgets()
@@ -170,24 +164,34 @@ class ListScreen(Screen):
         for idx, val in enumerate(items):
             row = BoxLayout(size_hint_y=None, height="70dp", spacing=5)
             inp = SInput(text=val)
-            inp.bind(text=lambda inst, v, i=idx: self.update_item(i, v))
-            del_btn = Button(text="X", size_hint_x=0.15, background_color=get_color_from_hex("#C62828"))
-            del_btn.bind(on_release=lambda x, i=idx: ConfirmPopup("삭제하시겠습니까?", lambda: self.delete_item(i)).open())
-            row.add_widget(inp); row.add_widget(del_btn)
-            self.ids.cont.add_widget(row)
-    def add_item(self):
-        App.get_running_app().get_cur_data()[self.mode].append("")
-        App.get_running_app().save_data(); self.refresh()
-    def update_item(self, i, v):
-        App.get_running_app().get_cur_data()[self.mode][i] = v
-        App.get_running_app().save_data()
-    def delete_item(self, i):
-        App.get_running_app().get_cur_data()[self.mode].pop(i)
-        App.get_running_app().save_data(); self.refresh()
+            inp.bind(text=lambda inst, v, i=idx: self.update(i, v))
+            btn = Button(text="X", size_hint_x=0.15, background_color=get_color_from_hex("#C62828"))
+            btn.bind(on_release=lambda x, i=idx: self.delete(i))
+            row.add_widget(inp); row.add_widget(btn); self.ids.cont.add_widget(row)
+    def add(self):
+        App.get_running_app().get_cur_data()[self.mode].append(""); App.get_running_app().save_data(); self.refresh()
+    def update(self, i, v):
+        App.get_running_app().get_cur_data()[self.mode][i] = v; App.get_running_app().save_data()
+    def delete(self, i):
+        App.get_running_app().get_cur_data()[self.mode].pop(i); App.get_running_app().save_data(); self.refresh()
 
 class PhotoScreen(Screen): pass
 
-# [무결성 KV 설계도]
+class ConfirmPopup(Popup):
+    def __init__(self, text, on_confirm, **kw):
+        super().__init__(**kw)
+        self.title = "확인"
+        self.size_hint = (0.8, 0.4)
+        l = BoxLayout(orientation='vertical', padding=20, spacing=20)
+        l.add_widget(Label(text=text, font_name="KFont" if HAS_FONT else None))
+        b = BoxLayout(spacing=10, size_hint_y=None, height="60dp")
+        y = Button(text="예", background_color=get_color_from_hex("#2E7D32"))
+        n = Button(text="아니오", background_color=get_color_from_hex("#C62828"))
+        y.bind(on_release=lambda x: [on_confirm(), self.dismiss()])
+        n.bind(on_release=self.dismiss)
+        b.add_widget(y); b.add_widget(n); l.add_widget(b); self.content = l
+
+# [4. KV 설계도 - 고정 배경 및 스타일]
 KV = '''
 #:import exists os.path.exists
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -200,6 +204,11 @@ KV = '''
             source: 'bg.png' if exists('bg.png') else None
             pos: self.pos
             size: self.size
+
+<Button>:
+    font_name: 'KFont' if exists('font.ttf') else None
+    background_normal: ''
+    background_color: (0.1, 0.4, 0.6, 1)
 
 ScreenManager:
     transition: FadeTransition()
@@ -221,12 +230,11 @@ ScreenManager:
 <MainScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 20
+        padding: 30
         spacing: 15
         Label:
             text: "PristonTale"
-            font_size: '45sp'
-            font_name: 'KFont' if exists('font.ttf') else None
+            font_size: '40sp'
             size_hint_y: None
             height: '100dp'
         BoxLayout:
@@ -234,16 +242,14 @@ ScreenManager:
             height: '65dp'
             spacing: 10
             SInput:
-                id: new_acc_name
-                hint_text: "계정 ID 입력"
+                id: new_acc
+                hint_text: "계정 ID 생성"
             Button:
                 text: "저장"
                 size_hint_x: 0.3
-                background_color: 0, 0.6, 0.3, 1
-                on_release: root.add_acc()
+                on_release: app.confirm_add(new_acc.text)
         SInput:
-            id: search_bar
-            hint_text: "계정 전체 검색"
+            hint_text: "전체 검색"
             on_text: root.refresh(self.text)
         ScrollView:
             BoxLayout:
@@ -257,13 +263,13 @@ ScreenManager:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
-        spacing: 15
+        spacing: 20
         GridLayout:
             id: grid
             cols: 2
             spacing: 15
         Button:
-            text: "뒤로가기"
+            text: "뒤로"
             size_hint_y: None
             height: '70dp'
             on_release: app.root.current = 'main'
@@ -272,7 +278,7 @@ ScreenManager:
     BoxLayout:
         orientation: 'vertical'
         padding: 40
-        spacing: 20
+        spacing: 15
         Button:
             text: "케릭정보창"
             on_release: app.root.current = 'info'
@@ -281,46 +287,39 @@ ScreenManager:
             on_release: app.root.current = 'equip'
         Button:
             text: "인벤토리창"
-            on_release: app.set_list_mode("inv")
+            on_release: app.set_list("inv")
         Button:
             text: "사진선택창"
             on_release: app.root.current = 'photo'
         Button:
             text: "저장보관소"
-            on_release: app.set_list_mode("storage")
+            on_release: app.set_list("storage")
         Button:
-            text: "뒤로가기"
+            text: "뒤로"
             size_hint_y: None
             height: '70dp'
-            background_color: 0.5, 0.5, 0.5, 1
             on_release: app.root.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 15
+        padding: 10
         ScrollView:
             BoxLayout:
                 id: cont
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-        BoxLayout:
+        Button:
+            text: "뒤로"
             size_hint_y: None
             height: '70dp'
-            spacing: 10
-            Button:
-                text: "전체삭제"
-                background_color: 0.8, 0.2, 0.2, 1
-                on_release: root.clear_all() if hasattr(root, 'clear_all') else None
-            Button:
-                text: "뒤로가기"
-                on_release: app.root.current = 'slot_menu'
+            on_release: app.root.current = 'slot_menu'
 
 <ListScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 15
+        padding: 10
         ScrollView:
             BoxLayout:
                 id: cont
@@ -334,8 +333,7 @@ ScreenManager:
             spacing: 10
             Button:
                 text: "추가"
-                background_color: 0, 0.6, 0.3, 1
-                on_release: root.add_item()
+                on_release: root.add()
             Button:
                 text: "닫기"
                 on_release: app.root.current = 'slot_menu'
@@ -343,43 +341,38 @@ ScreenManager:
 <PhotoScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 20
         Label:
-            text: "사진 선택 (권한 필요)"
-            font_name: 'KFont' if exists('font.ttf') else None
-        Button:
-            text: "갤러리 열기"
-            size_hint_y: None
-            height: '100dp'
+            text: "사진 선택창 (준비 중)"
         Button:
             text: "뒤로"
             size_hint_y: None
             height: '70dp'
             on_release: app.root.current = 'slot_menu'
-
-<Button>:
-    font_name: 'KFont' if exists('font.ttf') else None
-    font_size: '18sp'
-    background_normal: ''
-    background_color: 0.1, 0.4, 0.6, 1
 '''
 
 class PristonApp(App):
     def build(self):
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
-        return Builder.load_string(KV)
+        try:
+            return Builder.load_string(KV)
+        except Exception as e:
+            show_error_popup(f"KV 로드 실패: {e}")
     
-    def get_cur_data(self):
-        return self.user_data["accounts"][self.cur_acc][self.cur_slot]
+    def save_data(self): DataStore.save(self.user_data)
+    def get_cur_data(self): return self.user_data["accounts"][self.cur_acc][self.cur_slot]
     
-    def save_data(self):
-        DataStore.save(self.user_data)
-        
-    def set_list_mode(self, m):
-        screen = self.root.get_screen('list_edit')
-        screen.mode = m
-        self.root.current = 'list_edit'
+    def confirm_add(self, aid):
+        if not aid.strip(): return
+        p = ConfirmPopup(text=f"'{aid}' 저장?", on_confirm=lambda: self.do_add(aid))
+        p.open()
+    def do_add(self, aid):
+        self.user_data["accounts"][aid] = {str(i): {"info":{}, "equip":{}, "inv":[], "pics":[], "storage":[]} for i in range(1, 7)}
+        self.save_data(); self.root.get_screen('main').refresh()
+    
+    def set_list(self, m):
+        s = self.root.get_screen('list_edit')
+        s.mode = m; self.root.current = 'list_edit'
 
 if __name__ == "__main__":
     PristonApp().run()
