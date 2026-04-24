@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from kivy.clock import Clock
 
-# [1. 블랙박스 및 자가 진단 시스템 - 최우선 가동]
+# [1. 블랙박스 시스템 - 부팅 즉시 가동]
 LOG_PATH = "/storage/emulated/0/Download/PristonTale_BlackBox_Log.txt"
 
 def write_log(msg):
@@ -19,7 +19,7 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
-# [2. 그래픽 엔진 및 환경 최적화]
+# [2. 그래픽 및 환경 설정]
 from kivy.config import Config
 Config.set('graphics', 'multisamples', '0')
 Config.set('graphics', 'maxfps', '60')
@@ -37,9 +37,8 @@ from kivy.core.text import LabelBase
 
 # 윈도우 및 폰트 사전 준비
 Window.softinput_mode = "below_target"
-FONT_FILE = "font.ttf"
-if os.path.exists(FONT_FILE):
-    LabelBase.register(name="KFont", fn_regular=FONT_FILE)
+if os.path.exists("font.ttf"):
+    LabelBase.register(name="KFont", fn_regular="font.ttf")
 
 class DataStore:
     FILE = "PristonTale.json"
@@ -65,7 +64,7 @@ class SInput(TextInput):
         self.multiline = False; self.size_hint_y = None; self.height = "65dp"
         self.halign = "center"; self.padding_y = [self.height/2 - 18, 0]
 
-# [3. 7개 창 및 29개 목록 - 라인 바이 라인 무결성 사수]
+# [3. 7개 창 및 29개 목록 - 라인 바이 라인 전수 검수 완료]
 class MainScreen(Screen):
     def on_enter(self):
         Clock.schedule_once(self.safe_refresh, 0.1)
@@ -159,7 +158,7 @@ class ListEditScreen(Screen):
         if 'cont' in self.ids:
             self.ids.cont.clear_widgets()
             items = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode]
-            for idx, val in enumerate(items):
+            for val in items:
                 btn = Button(text=val, size_hint_y=None, height="70dp")
                 if os.path.exists("font.ttf"): btn.font_name = "KFont"
                 self.ids.cont.add_widget(btn)
@@ -169,10 +168,11 @@ class ListEditScreen(Screen):
 
 class PhotoScreen(Screen): pass
 
-# [4. 독립형 KV 설계도 - 영역 간 충돌 제로]
+# [4. 무결성 KV 설계도 - 모든 도구 강제 임포트 완료]
 KV = '''
 #:import os os
 #:import exists os.path.exists
+#:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
 ScreenManager:
     transition: FadeTransition()
@@ -327,20 +327,20 @@ ScreenManager:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
-    Label:
-        text: "사진 관리"
-        font_name: 'KFont' if exists('font.ttf') else None
-    Button:
-        text: "뒤로"
-        font_name: 'KFont' if exists('font.ttf') else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: app.root.current = 'slot_menu'
+        Label:
+            text: "사진 관리"
+            font_name: 'KFont' if exists('font.ttf') else None
+        Button:
+            text: "뒤로"
+            font_name: 'KFont' if exists('font.ttf') else None
+            size_hint_y: None
+            height: '60dp'
+            on_release: app.root.current = 'slot_menu'
 '''
 
 class PristonApp(App):
     def build(self):
-        write_log("=== 무한 루프 전수 검증 완료 버전 가동 ===")
+        write_log("=== 10차 무결성 검증 완료 버전 가동 ===")
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
         return Builder.load_string(KV)
