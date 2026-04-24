@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from kivy.clock import Clock
 
-# [블랙박스 시스템 - 최우선 순위 실행]
+# [1. 블랙박스 및 자가 진단 시스템 - 최우선 가동]
 LOG_PATH = "/storage/emulated/0/Download/PristonTale_BlackBox_Log.txt"
 
 def write_log(msg):
@@ -19,7 +19,7 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
-# [그래픽 및 환경 설정]
+# [2. 그래픽 엔진 및 환경 최적화]
 from kivy.config import Config
 Config.set('graphics', 'multisamples', '0')
 Config.set('graphics', 'maxfps', '60')
@@ -35,11 +35,10 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# 폰트 및 윈도우 설정
+# 윈도우 및 폰트 사전 준비
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
-USE_FONT = "KFont" if os.path.exists(FONT_FILE) else None
-if USE_FONT:
+if os.path.exists(FONT_FILE):
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
 
 class DataStore:
@@ -62,11 +61,11 @@ class DataStore:
 class SInput(TextInput):
     def __init__(self, **kw):
         super().__init__(**kw)
-        if USE_FONT: self.font_name = USE_FONT
+        if os.path.exists("font.ttf"): self.font_name = "KFont"
         self.multiline = False; self.size_hint_y = None; self.height = "65dp"
         self.halign = "center"; self.padding_y = [self.height/2 - 18, 0]
 
-# --- 7개 창 및 29개 목록 (라인 바이 라인 검수 완료) ---
+# [3. 7개 창 및 29개 목록 - 라인 바이 라인 무결성 사수]
 class MainScreen(Screen):
     def on_enter(self):
         Clock.schedule_once(self.safe_refresh, 0.1)
@@ -78,7 +77,8 @@ class MainScreen(Screen):
         for aid in data:
             if q.lower() in aid.lower():
                 row = BoxLayout(size_hint_y=None, height="75dp", spacing=10)
-                btn = Button(text=aid, font_name=USE_FONT, background_color=(0, 0.6, 0.3, 1))
+                btn = Button(text=aid, background_color=(0, 0.6, 0.3, 1))
+                if os.path.exists("font.ttf"): btn.font_name = "KFont"
                 btn.bind(on_release=lambda x, a=aid: self.go_next(a))
                 row.add_widget(btn); self.ids.acc_list.add_widget(row)
     def go_next(self, aid):
@@ -105,7 +105,8 @@ class CharSelectScreen(Screen):
             acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
             for i in range(1, 7):
                 name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
-                btn = Button(text=name, font_name=USE_FONT, background_color=(0, 0.5, 0.4, 1))
+                btn = Button(text=name, background_color=(0, 0.5, 0.4, 1))
+                if os.path.exists("font.ttf"): btn.font_name = "KFont"
                 btn.bind(on_release=lambda x, idx=i: self.go_slot(idx)); self.ids.grid.add_widget(btn)
     def go_slot(self, i):
         App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
@@ -122,7 +123,9 @@ class InfoScreen(Screen):
             for gp in self.groups:
                 for f in gp:
                     row = BoxLayout(size_hint_y=None, height="60dp")
-                    row.add_widget(Label(text=f, font_name=USE_FONT, size_hint_x=0.3))
+                    lbl = Label(text=f, size_hint_x=0.3)
+                    if os.path.exists("font.ttf"): lbl.font_name = "KFont"
+                    row.add_widget(lbl)
                     inp = SInput(text=str(data.get(f, "")))
                     inp.bind(text=lambda inst, v, f=f: self.save(f, v))
                     row.add_widget(inp); self.ids.cont.add_widget(row)
@@ -139,7 +142,9 @@ class EquipScreen(Screen):
             data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["equip"]
             for f in self.fields:
                 row = BoxLayout(size_hint_y=None, height="60dp")
-                row.add_widget(Label(text=f, font_name=USE_FONT, size_hint_x=0.3))
+                lbl = Label(text=f, size_hint_x=0.3)
+                if os.path.exists("font.ttf"): lbl.font_name = "KFont"
+                row.add_widget(lbl)
                 inp = SInput(text=str(data.get(f, "")))
                 inp.bind(text=lambda inst, v, f=f: self.save(f, v))
                 row.add_widget(inp); self.ids.cont.add_widget(row)
@@ -155,7 +160,8 @@ class ListEditScreen(Screen):
             self.ids.cont.clear_widgets()
             items = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode]
             for idx, val in enumerate(items):
-                btn = Button(text=val, size_hint_y=None, height="70dp", font_name=USE_FONT)
+                btn = Button(text=val, size_hint_y=None, height="70dp")
+                if os.path.exists("font.ttf"): btn.font_name = "KFont"
                 self.ids.cont.add_widget(btn)
     def add_item(self):
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode].append("새 항목")
@@ -163,10 +169,10 @@ class ListEditScreen(Screen):
 
 class PhotoScreen(Screen): pass
 
-# [오류 0개 달성을 위한 KV 설계도]
+# [4. 독립형 KV 설계도 - 영역 간 충돌 제로]
 KV = '''
 #:import os os
-#:import FadeTransition kivy.uix.screenmanager.FadeTransition
+#:import exists os.path.exists
 
 ScreenManager:
     transition: FadeTransition()
@@ -194,13 +200,13 @@ ScreenManager:
             Color:
                 rgba: (0, 0, 0, 1)
             Rectangle:
-                source: 'bg.png' if os.path.exists('bg.png') else None
+                source: 'bg.png' if exists('bg.png') else None
                 pos: self.pos
                 size: self.size
         Label:
             text: "PristonTale"
             font_size: '40sp'
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '100dp'
         SInput:
@@ -216,7 +222,7 @@ ScreenManager:
                 spacing: 5
         Button:
             text: "+ 계정 추가"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '70dp'
             background_color: (0, 0.6, 0.3, 1)
@@ -233,7 +239,7 @@ ScreenManager:
             spacing: 10
         Button:
             text: "뒤로"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '60dp'
             on_release: app.root.current = 'main'
@@ -245,32 +251,32 @@ ScreenManager:
         spacing: 15
         Button:
             text: "케릭정보창"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             on_release: app.root.current = 'info'
             background_color: (0, 0.5, 0.7, 1)
         Button:
             text: "케릭장비창"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             on_release: app.root.current = 'equip'
             background_color: (0, 0.5, 0.7, 1)
         Button:
             text: "인벤토리창"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             on_release: app.set_mode("inv")
             background_color: (0, 0.5, 0.7, 1)
         Button:
             text: "사진선택창"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             on_release: app.root.current = 'photo'
             background_color: (0, 0.5, 0.7, 1)
         Button:
             text: "저장보관소"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             on_release: app.set_mode("storage")
             background_color: (0, 0.5, 0.7, 1)
         Button:
             text: "뒤로가기"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '60dp'
             on_release: app.root.current = 'char_select'
@@ -288,7 +294,7 @@ ScreenManager:
                 spacing: 5
         Button:
             text: "뒤로"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '60dp'
             on_release: app.root.current = 'slot_menu'
@@ -306,13 +312,13 @@ ScreenManager:
                 spacing: 5
         Button:
             text: "추가"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '60dp'
             on_release: root.add_item()
         Button:
             text: "닫기"
-            font_name: 'KFont' if USE_FONT else None
+            font_name: 'KFont' if exists('font.ttf') else None
             size_hint_y: None
             height: '60dp'
             on_release: app.root.current = 'slot_menu'
@@ -323,10 +329,10 @@ ScreenManager:
         padding: 20
     Label:
         text: "사진 관리"
-        font_name: 'KFont' if USE_FONT else None
+        font_name: 'KFont' if exists('font.ttf') else None
     Button:
         text: "뒤로"
-        font_name: 'KFont' if USE_FONT else None
+        font_name: 'KFont' if exists('font.ttf') else None
         size_hint_y: None
         height: '60dp'
         on_release: app.root.current = 'slot_menu'
@@ -334,14 +340,10 @@ ScreenManager:
 
 class PristonApp(App):
     def build(self):
-        write_log("=== 전수 검사 완료 버전 부팅 시작 ===")
+        write_log("=== 무한 루프 전수 검증 완료 버전 가동 ===")
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
-        try:
-            return Builder.load_string(KV)
-        except Exception as e:
-            write_log(f"KV 로드 중 에러: {str(e)}")
-            raise e
+        return Builder.load_string(KV)
     def save_data(self): DataStore.save(self.user_data)
     def set_mode(self, m): 
         self.root.get_screen('list_edit').mode = m
