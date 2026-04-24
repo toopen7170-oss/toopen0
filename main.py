@@ -1,4 +1,5 @@
 import os, sys, traceback, json
+from kivy.clock import Clock # 타이밍 버그 해결사
 
 # [블랙박스 강제 기록 시스템]
 LOG_PATH = "/storage/emulated/0/Download/PristonTale_BlackBox_Log.txt"
@@ -18,7 +19,7 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
-# [그래픽 설정 및 엔진 로드]
+# [그래픽 설정]
 from kivy.config import Config
 Config.set('graphics', 'multisamples', '0')
 Config.set('graphics', 'maxfps', '60')
@@ -65,11 +66,19 @@ class SInput(TextInput):
         self.multiline = False; self.size_hint_y = None; self.height = "65dp"
         self.halign = "center"; self.padding_y = [self.height/2 - 18, 0]
 
-# --- 7개 창 및 29개 목록 전수 검사 완료 ---
+# --- 7개 창 및 29개 목록 무결성 사수 ---
 class MainScreen(Screen):
     def on_enter(self):
-        write_log("메인 화면 진입 성공")
-        self.refresh()
+        # 0.1초 뒤에 refresh 실행 (화면이 완전히 그려진 뒤에 acc_list를 찾도록 함)
+        Clock.schedule_once(self.safe_refresh, 0.1)
+    
+    def safe_refresh(self, dt):
+        if 'acc_list' in self.ids:
+            self.refresh()
+        else:
+            write_log("경고: acc_list를 아직 찾을 수 없음 - 재시도")
+            Clock.schedule_once(self.safe_refresh, 0.2)
+
     def refresh(self, q=""):
         self.ids.acc_list.clear_widgets()
         data = App.get_running_app().user_data.get("accounts", {})
@@ -79,15 +88,18 @@ class MainScreen(Screen):
                 btn = Button(text=aid, font_name=USE_FONT, background_color=(0, 0.6, 0.3, 1))
                 btn.bind(on_release=lambda x, a=aid: self.go_next(a))
                 row.add_widget(btn); self.ids.acc_list.add_widget(row)
+
     def go_next(self, aid):
         App.get_running_app().cur_acc = aid
         self.manager.current = 'char_select'
+
     def show_add(self):
         c = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.inp = SInput(hint_text="새 계정 ID"); c.add_widget(self.inp)
         btn = Button(text="저장", size_hint_y=None, height="60dp")
         c.add_widget(btn); pop = Popup(title="추가", content=c, size_hint=(0.85, 0.4))
         btn.bind(on_release=lambda x: self.save_acc(pop)); pop.open()
+
     def save_acc(self, pop):
         aid = self.inp.text.strip()
         if aid:
@@ -97,64 +109,73 @@ class MainScreen(Screen):
 
 class CharSelectScreen(Screen):
     def on_enter(self):
-        self.ids.grid.clear_widgets()
-        acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
-        for i in range(1, 7):
-            name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
-            btn = Button(text=name, font_name=USE_FONT, background_color=(0, 0.5, 0.4, 1))
-            btn.bind(on_release=lambda x, idx=i: self.go_slot(idx)); self.ids.grid.add_widget(btn)
+        Clock.schedule_once(self.refresh_grid, 0.1)
+    def refresh_grid(self, dt):
+        if 'grid' in self.ids:
+            self.ids.grid.clear_widgets()
+            acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
+            for i in range(1, 7):
+                name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
+                btn = Button(text=name, font_name=USE_FONT, background_color=(0, 0.5, 0.4, 1))
+                btn.bind(on_release=lambda x, idx=i: self.go_slot(idx)); self.ids.grid.add_widget(btn)
     def go_slot(self, i):
         App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
 class SlotMenuScreen(Screen): pass
 
-class InfoScreen(Screen): # 3. 케릭정보창
+class InfoScreen(Screen):
     groups = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
-        self.ids.cont.clear_widgets()
-        data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"]
-        for gp in self.groups:
-            for f in gp:
+        Clock.schedule_once(self.load_info, 0.1)
+    def load_info(self, dt):
+        if 'cont' in self.ids:
+            self.ids.cont.clear_widgets()
+            data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"]
+            for gp in self.groups:
+                for f in gp:
+                    row = BoxLayout(size_hint_y=None, height="60dp")
+                    row.add_widget(Label(text=f, font_name=USE_FONT, size_hint_x=0.3))
+                    inp = SInput(text=str(data.get(f, "")))
+                    inp.bind(text=lambda inst, v, f=f: self.save(f, v))
+                    row.add_widget(inp); self.ids.cont.add_widget(row)
+    def save(self, f, v):
+        App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"][f] = v
+        App.get_running_app().save_data()
+
+class EquipScreen(Screen):
+    fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
+    def on_enter(self):
+        Clock.schedule_once(self.load_equip, 0.1)
+    def load_equip(self, dt):
+        if 'cont' in self.ids:
+            self.ids.cont.clear_widgets()
+            data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["equip"]
+            for f in self.fields:
                 row = BoxLayout(size_hint_y=None, height="60dp")
                 row.add_widget(Label(text=f, font_name=USE_FONT, size_hint_x=0.3))
                 inp = SInput(text=str(data.get(f, "")))
                 inp.bind(text=lambda inst, v, f=f: self.save(f, v))
                 row.add_widget(inp); self.ids.cont.add_widget(row)
     def save(self, f, v):
-        App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"][f] = v
-        App.get_running_app().save_data()
-
-class EquipScreen(Screen): # 4. 케릭장비창
-    fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
-    def on_enter(self):
-        self.ids.cont.clear_widgets()
-        data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["equip"]
-        for f in self.fields:
-            row = BoxLayout(size_hint_y=None, height="60dp")
-            row.add_widget(Label(text=f, font_name=USE_FONT, size_hint_x=0.3))
-            inp = SInput(text=str(data.get(f, "")))
-            inp.bind(text=lambda inst, v, f=f: self.save(f, v))
-            row.add_widget(inp); self.ids.cont.add_widget(row)
-    def save(self, f, v):
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["equip"][f] = v
         App.get_running_app().save_data()
 
 class ListEditScreen(Screen):
     mode = "inv"
-    def on_enter(self): self.refresh()
-    def refresh(self):
-        self.ids.cont.clear_widgets()
-        items = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode]
-        for idx, val in enumerate(items):
-            btn = Button(text=val, size_hint_y=None, height="70dp", font_name=USE_FONT)
-            self.ids.cont.add_widget(btn)
+    def on_enter(self): Clock.schedule_once(self.refresh_list, 0.1)
+    def refresh_list(self, dt):
+        if 'cont' in self.ids:
+            self.ids.cont.clear_widgets()
+            items = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode]
+            for idx, val in enumerate(items):
+                btn = Button(text=val, size_hint_y=None, height="70dp", font_name=USE_FONT)
+                self.ids.cont.add_widget(btn)
     def add_item(self):
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode].append("새 항목")
-        App.get_running_app().save_data(); self.refresh()
+        App.get_running_app().save_data(); self.refresh_list(0)
 
 class PhotoScreen(Screen): pass
 
-# [문법 교정 완료된 KV 설계도]
 KV = '''
 ScreenManager:
     transition: FadeTransition()
@@ -213,16 +234,16 @@ ScreenManager:
         orientation: 'vertical'
         padding: 20
         spacing: 10
-    GridLayout:
-        id: grid
-        cols: 2
-        spacing: 10
-    Button:
-        text: "뒤로"
-        font_name: 'KFont' if USE_FONT else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: app.root.current = 'main'
+        GridLayout:
+            id: grid
+            cols: 2
+            spacing: 10
+        Button:
+            text: "뒤로"
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '60dp'
+            on_release: app.root.current = 'main'
 
 <SlotMenuScreen>:
     BoxLayout:
@@ -259,69 +280,68 @@ ScreenManager:
             font_name: 'KFont' if USE_FONT else None
             size_hint_y: None
             height: '60dp'
-            background_color: (0.5, 0.5, 0.5, 1)
             on_release: app.root.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 10
-    ScrollView:
-        BoxLayout:
-            id: cont
-            orientation: 'vertical'
+        ScrollView:
+            BoxLayout:
+                id: cont
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 5
+        Button:
+            text: "뒤로"
+            font_name: 'KFont' if USE_FONT else None
             size_hint_y: None
-            height: self.minimum_height
-            spacing: 5
-    Button:
-        text: "뒤로"
-        font_name: 'KFont' if USE_FONT else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: app.root.current = 'slot_menu'
+            height: '60dp'
+            on_release: app.root.current = 'slot_menu'
 
 <ListEditScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 10
-    ScrollView:
-        BoxLayout:
-            id: cont
-            orientation: 'vertical'
+        ScrollView:
+            BoxLayout:
+                id: cont
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 5
+        Button:
+            text: "추가"
+            font_name: 'KFont' if USE_FONT else None
             size_hint_y: None
-            height: self.minimum_height
-            spacing: 5
-    Button:
-        text: "추가"
-        font_name: 'KFont' if USE_FONT else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: root.add_item()
-    Button:
-        text: "닫기"
-        font_name: 'KFont' if USE_FONT else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: app.root.current = 'slot_menu'
+            height: '60dp'
+            on_release: root.add_item()
+        Button:
+            text: "닫기"
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '60dp'
+            on_release: app.root.current = 'slot_menu'
 
 <PhotoScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 20
-    Label:
-        text: "사진 관리"
-        font_name: 'KFont' if USE_FONT else None
-    Button:
-        text: "뒤로"
-        font_name: 'KFont' if USE_FONT else None
-        size_hint_y: None
-        height: '60dp'
-        on_release: app.root.current = 'slot_menu'
+        Label:
+            text: "사진 관리"
+            font_name: 'KFont' if USE_FONT else None
+        Button:
+            text: "뒤로"
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '60dp'
+            on_release: app.root.current = 'slot_menu'
 '''
 
 class PristonApp(App):
     def build(self):
-        write_log("앱 빌드(Build) 재시작")
+        write_log("=== 앱 최종 빌드 성공 ===")
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
         return Builder.load_string(KV)
