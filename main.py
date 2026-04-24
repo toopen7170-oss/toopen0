@@ -1,17 +1,33 @@
-import os, sys, traceback
+import os, sys, traceback, json
 
-# [최하층 네이티브 로그 시스템]
-# Kivy가 로딩되기 전부터 작동하며, 화면에 안 뜨더라도 파일로 흔적을 남깁니다.
-def write_native_log(msg):
-    with open("PristonTale_Native_Log.txt", "a", encoding="utf-8") as f:
-        f.write(str(msg) + "\n")
+# [로그 저장 경로 설정 - 갤럭시 Download 폴더]
+# 안드로이드 공용 폴더인 Download에 로그를 남겨 점주님이 바로 확인 가능하게 함
+LOG_PATH = "/storage/emulated/0/Download/PristonTale_BlackBox_Log.txt"
 
-write_native_log("--- APP START CHECK ---")
+def write_log(msg):
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"\n[INFO] {msg}")
+            f.flush() # 메모리에 머물지 않고 즉시 파일로 기록
+            os.fsync(f.fileno()) # OS 수준에서 강제 쓰기 실행
+    except:
+        # 권한 문제로 Download 폴더 실패 시 내부 저장소에 시도
+        try:
+            with open("Internal_Log.txt", "a", encoding="utf-8") as f:
+                f.write(f"\n[INTERNAL] {msg}")
+        except: pass
+
+write_log("=== 앱 부팅 시퀀스 시작 ===")
 
 def global_exception_handler(exctype, value, tb):
-    err = "".join(traceback.format_exception(exctype, value, tb))
-    write_native_log("!!! CRITICAL ERROR !!!\n" + err)
-    # 화면 출력 시도
+    err_lines = traceback.format_exception(exctype, value, tb)
+    full_err_msg = "".join(err_lines)
+    
+    # 팅기기 직전 에러 위치와 원인을 무조건 기록 (빈 파일 방지)
+    write_log("!!! 치명적 오류 발생 !!!")
+    write_log(full_err_msg)
+    
+    # 화면 출력 시도 (Kivy 엔진이 살아있을 경우)
     try:
         from kivy.uix.popup import Popup
         from kivy.uix.label import Label
@@ -19,12 +35,12 @@ def global_exception_handler(exctype, value, tb):
         from kivy.uix.boxlayout import BoxLayout
         from kivy.uix.button import Button
         
-        content = BoxLayout(orientation='vertical', padding=20)
-        content.add_widget(Label(text="🚨 블랙박스 진단 시스템 🚨", color=(1,0,0,1), bold=True))
-        content.add_widget(TextInput(text=err, readonly=True))
-        btn = Button(text="종료 (사진 촬영 필수)", size_hint_y=None, height="80dp")
+        content = BoxLayout(orientation='vertical', padding=10)
+        content.add_widget(Label(text="🚨 블랙박스 오류 진단 🚨", color=(1,0,0,1), size_hint_y=None, height="50dp"))
+        content.add_widget(TextInput(text=full_err_msg, readonly=True))
+        btn = Button(text="확인 후 종료", size_hint_y=None, height="70dp")
         content.add_widget(btn)
-        pop = Popup(title="Error Log", content=content, size_hint=(0.95, 0.95))
+        pop = Popup(title="BlackBox Report", content=content, size_hint=(0.9, 0.9), auto_dismiss=False)
         btn.bind(on_release=lambda x: sys.exit(1))
         pop.open()
     except:
@@ -32,11 +48,10 @@ def global_exception_handler(exctype, value, tb):
 
 sys.excepthook = global_exception_handler
 
-# [그래픽 엔진 강제 안정화 설정]
-# 최신 기기에서 충돌을 일으키는 텍스처 로딩 방식을 가장 안정적인 구형 방식으로 고정
+# [그래픽 엔진 세이프 모드]
 from kivy.config import Config
 Config.set('graphics', 'multisamples', '0')
-Config.set('graphics', 'maxfps', '30') # S26의 초고주사율과 충돌 방지
+Config.set('graphics', 'maxfps', '30')
 
 from kivy.app import App
 from kivy.lang import Builder
@@ -49,15 +64,13 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# 폰트 및 환경 설정
+# 환경 설정
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 USE_FONT = "KFont" if os.path.exists(FONT_FILE) else None
 if USE_FONT:
     LabelBase.register(name="KFont", fn_regular=FONT_FILE)
 
-# 데이터 관리 로직
-import json
 class DataStore:
     FILE = "PristonTale.json"
     @staticmethod
@@ -86,7 +99,7 @@ class SInput(TextInput):
 # --- 제1 기본원칙 사수 (7개 창 구조) ---
 class MainScreen(Screen):
     def on_enter(self): 
-        write_native_log("MainScreen Entered")
+        write_log("현재 위치: [1번 계정생성창(MainScreen)] 진입")
         self.refresh()
     def refresh(self, q=""):
         self.ids.acc_list.clear_widgets()
@@ -96,8 +109,7 @@ class MainScreen(Screen):
                 row = BoxLayout(size_hint_y=None, height="75dp", spacing=10)
                 btn = Button(text=aid, font_name=USE_FONT, background_color=(0, 0.6, 0.3, 1))
                 btn.bind(on_release=lambda x, a=aid: self.go_next(a))
-                row.add_widget(btn)
-                self.ids.acc_list.add_widget(row)
+                row.add_widget(btn); self.ids.acc_list.add_widget(row)
     def go_next(self, aid):
         App.get_running_app().cur_acc = aid
         self.manager.current = 'char_select'
@@ -105,7 +117,7 @@ class MainScreen(Screen):
         c = BoxLayout(orientation='vertical', padding=15, spacing=15)
         self.inp = SInput(hint_text="ID 입력"); c.add_widget(self.inp)
         btn = Button(text="저장", size_hint_y=None, height="60dp")
-        c.add_widget(btn); pop = Popup(title="계정 추가", content=c, size_hint=(0.85, 0.4))
+        c.add_widget(btn); pop = Popup(title="추가", content=c, size_hint=(0.85, 0.4))
         btn.bind(on_release=lambda x: self.save_acc(pop)); pop.open()
     def save_acc(self, pop):
         aid = self.inp.text.strip()
@@ -116,6 +128,7 @@ class MainScreen(Screen):
 
 class CharSelectScreen(Screen):
     def on_enter(self):
+        write_log("현재 위치: [2번 케릭선택창(CharSelect)] 진입")
         self.ids.grid.clear_widgets()
         acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
@@ -124,14 +137,15 @@ class CharSelectScreen(Screen):
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, i):
-        App.get_running_app().cur_slot = str(i)
-        self.manager.current = 'slot_menu'
+        App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
-class SlotMenuScreen(Screen): pass
+class SlotMenuScreen(Screen):
+    def on_enter(self): write_log("현재 위치: [슬롯 메뉴창] 진입")
 
-class InfoScreen(Screen):
+class InfoScreen(Screen): # 3. 케릭정보창 (18개 목록)
     groups = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
+        write_log("현재 위치: [3번 케릭정보창] 목록 생성 시작")
         self.ids.cont.clear_widgets()
         data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"]
         for gp in self.groups:
@@ -145,9 +159,10 @@ class InfoScreen(Screen):
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"][f] = v
         App.get_running_app().save_data()
 
-class EquipScreen(Screen):
+class EquipScreen(Screen): # 4. 케릭장비창 (11개 목록)
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self):
+        write_log("현재 위치: [4번 케릭장비창] 목록 생성 시작")
         self.ids.cont.clear_widgets()
         data = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["equip"]
         for f in self.fields:
@@ -162,7 +177,9 @@ class EquipScreen(Screen):
 
 class ListEditScreen(Screen):
     mode = "inv"
-    def on_enter(self): self.refresh()
+    def on_enter(self): 
+        write_log(f"현재 위치: [{self.mode} 리스트창] 진입")
+        self.refresh()
     def refresh(self):
         self.ids.cont.clear_widgets()
         items = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode]
@@ -173,7 +190,8 @@ class ListEditScreen(Screen):
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot][self.mode].append("새 항목")
         App.get_running_app().save_data(); self.refresh()
 
-class PhotoScreen(Screen): pass
+class PhotoScreen(Screen):
+    def on_enter(self): write_log("현재 위치: [사진선택창] 진입")
 
 KV = '''
 ScreenManager:
@@ -189,7 +207,6 @@ ScreenManager:
 <MainScreen>:
     BoxLayout:
         orientation: 'vertical'; padding: 20; spacing: 10
-        # 배경화면 일시 비활성화 (안정성 테스트용)
         Label: text: "PristonTale"; font_size: '40sp'; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '100dp'
         SInput: id: search; hint_text: "검색"; on_text: root.refresh(self.text)
         ScrollView:
@@ -226,20 +243,16 @@ ScreenManager:
 
 <PhotoScreen>:
     BoxLayout: orientation: 'vertical'; padding: 20
-    Label: text: "사진창 (테스트 중)"; font_name: 'KFont' if USE_FONT else None
+    Label: text: "사진 관리"; font_name: 'KFont' if USE_FONT else None
     Button: text: "뒤로"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'slot_menu'
 '''
 
 class PristonApp(App):
     def build(self):
-        write_native_log("App Build Start")
+        write_log("App Build 과정 시작")
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
-        try:
-            return Builder.load_string(KV)
-        except Exception as e:
-            write_native_log("KV Load Error: " + str(e))
-            raise e
+        return Builder.load_string(KV)
     def save_data(self): DataStore.save(self.user_data)
     def set_mode(self, m): self.root.get_screen('list_edit').mode = m; self.root.current = 'list_edit'
 
@@ -247,4 +260,4 @@ if __name__ == "__main__":
     try:
         PristonApp().run()
     except Exception as e:
-        write_native_log("Run Error: " + str(e))
+        write_log(f"런타임 치명적 오류: {str(e)}")
