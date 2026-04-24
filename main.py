@@ -34,7 +34,7 @@ from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.core.text import LabelBase
 
-# 폰트 등록 및 환경 설정
+# 환경 설정
 Window.softinput_mode = "below_target"
 FONT_FILE = "font.ttf"
 USE_FONT = "KFont" if os.path.exists(FONT_FILE) else None
@@ -68,7 +68,7 @@ class SInput(TextInput):
 # --- 7개 창 및 29개 목록 전수 검사 완료 ---
 class MainScreen(Screen):
     def on_enter(self):
-        write_log("메인 화면 진입 - 배경 로드 시도")
+        write_log("메인 화면 진입 성공")
         self.refresh()
     def refresh(self, q=""):
         self.ids.acc_list.clear_widgets()
@@ -97,7 +97,6 @@ class MainScreen(Screen):
 
 class CharSelectScreen(Screen):
     def on_enter(self):
-        write_log("캐릭터 선택창 진입")
         self.ids.grid.clear_widgets()
         acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
@@ -109,7 +108,7 @@ class CharSelectScreen(Screen):
 
 class SlotMenuScreen(Screen): pass
 
-class InfoScreen(Screen): # 3. 케릭정보창 (18개 세부항목)
+class InfoScreen(Screen): # 3. 케릭정보창
     groups = [['이름', '직위', '클랜', '레벨'], ['생명력', '기력', '근력'], ['힘', '정신력', '재능', '민첩', '건강'], ['명중', '공격', '방어', '흡수', '속도']]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -125,7 +124,7 @@ class InfoScreen(Screen): # 3. 케릭정보창 (18개 세부항목)
         App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc][App.get_running_app().cur_slot]["info"][f] = v
         App.get_running_app().save_data()
 
-class EquipScreen(Screen): # 4. 케릭장비창 (11개 세부항목)
+class EquipScreen(Screen): # 4. 케릭장비창
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self):
         self.ids.cont.clear_widgets()
@@ -155,72 +154,181 @@ class ListEditScreen(Screen):
 
 class PhotoScreen(Screen): pass
 
+# [문법 교정 완료된 KV 설계도]
 KV = '''
 ScreenManager:
     transition: FadeTransition()
-    MainScreen: name: 'main'
-    CharSelectScreen: name: 'char_select'
-    SlotMenuScreen: name: 'slot_menu'
-    InfoScreen: name: 'info'
-    EquipScreen: name: 'equip'
-    ListEditScreen: name: 'list_edit'
-    PhotoScreen: name: 'photo'
+    MainScreen:
+        name: 'main'
+    CharSelectScreen:
+        name: 'char_select'
+    SlotMenuScreen:
+        name: 'slot_menu'
+    InfoScreen:
+        name: 'info'
+    EquipScreen:
+        name: 'equip'
+    ListEditScreen:
+        name: 'list_edit'
+    PhotoScreen:
+        name: 'photo'
 
 <MainScreen>:
     BoxLayout:
-        orientation: 'vertical'; padding: 20; spacing: 10
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
         canvas.before:
             Rectangle:
                 source: 'bg.png' if os.path.exists('bg.png') else ''
-                pos: self.pos; size: self.size
-        Label: text: "PristonTale"; font_size: '40sp'; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '100dp'
-        SInput: id: search; hint_text: "검색"; on_text: root.refresh(self.text)
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "PristonTale"
+            font_size: '40sp'
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '100dp'
+        SInput:
+            id: search
+            hint_text: "검색"
+            on_text: root.refresh(self.text)
         ScrollView:
-            BoxLayout: id: acc_list; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height; spacing: 5
-        Button: text: "+ 계정 추가"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '70dp'; background_color:(0, 0.6, 0.3, 1); on_release: root.show_add()
+            BoxLayout:
+                id: acc_list
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 5
+        Button:
+            text: "+ 계정 추가"
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '70dp'
+            background_color: (0, 0.6, 0.3, 1)
+            on_release: root.show_add()
 
 <CharSelectScreen>:
-    BoxLayout: orientation: 'vertical'; padding: 20; spacing: 10
-    GridLayout: id: grid; cols: 2; spacing: 10
-    Button: text: "뒤로"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'main'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+        spacing: 10
+    GridLayout:
+        id: grid
+        cols: 2
+        spacing: 10
+    Button:
+        text: "뒤로"
+        font_name: 'KFont' if USE_FONT else None
+        size_hint_y: None
+        height: '60dp'
+        on_release: app.root.current = 'main'
 
 <SlotMenuScreen>:
     BoxLayout:
-        orientation: 'vertical'; padding: 30; spacing: 15
-        Button: text: "케릭정보창"; font_name: 'KFont' if USE_FONT else None; on_release: app.root.current = 'info'; background_color:(0, 0.5, 0.7, 1)
-        Button: text: "케릭장비창"; font_name: 'KFont' if USE_FONT else None; on_release: app.root.current = 'equip'; background_color:(0, 0.5, 0.7, 1)
-        Button: text: "인벤토리창"; font_name: 'KFont' if USE_FONT else None; on_release: app.set_mode("inv"); background_color:(0, 0.5, 0.7, 1)
-        Button: text: "사진선택창"; font_name: 'KFont' if USE_FONT else None; on_release: app.root.current = 'photo'; background_color:(0, 0.5, 0.7, 1)
-        Button: text: "저장보관소"; font_name: 'KFont' if USE_FONT else None; on_release: app.set_mode("storage"); background_color:(0, 0.5, 0.7, 1)
-        Button: text: "뒤로가기"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'char_select'
+        orientation: 'vertical'
+        padding: 30
+        spacing: 15
+        Button:
+            text: "케릭정보창"
+            font_name: 'KFont' if USE_FONT else None
+            on_release: app.root.current = 'info'
+            background_color: (0, 0.5, 0.7, 1)
+        Button:
+            text: "케릭장비창"
+            font_name: 'KFont' if USE_FONT else None
+            on_release: app.root.current = 'equip'
+            background_color: (0, 0.5, 0.7, 1)
+        Button:
+            text: "인벤토리창"
+            font_name: 'KFont' if USE_FONT else None
+            on_release: app.set_mode("inv")
+            background_color: (0, 0.5, 0.7, 1)
+        Button:
+            text: "사진선택창"
+            font_name: 'KFont' if USE_FONT else None
+            on_release: app.root.current = 'photo'
+            background_color: (0, 0.5, 0.7, 1)
+        Button:
+            text: "저장보관소"
+            font_name: 'KFont' if USE_FONT else None
+            on_release: app.set_mode("storage")
+            background_color: (0, 0.5, 0.7, 1)
+        Button:
+            text: "뒤로가기"
+            font_name: 'KFont' if USE_FONT else None
+            size_hint_y: None
+            height: '60dp'
+            background_color: (0.5, 0.5, 0.5, 1)
+            on_release: app.root.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>:
-    BoxLayout: orientation: 'vertical'; padding: 10
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 10
     ScrollView:
-        BoxLayout: id: cont; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height; spacing: 5
-    Button: text: "뒤로"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'slot_menu'
+        BoxLayout:
+            id: cont
+            orientation: 'vertical'
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: 5
+    Button:
+        text: "뒤로"
+        font_name: 'KFont' if USE_FONT else None
+        size_hint_y: None
+        height: '60dp'
+        on_release: app.root.current = 'slot_menu'
 
 <ListEditScreen>:
-    BoxLayout: orientation: 'vertical'; padding: 10
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 10
     ScrollView:
-        BoxLayout: id: cont; orientation: 'vertical'; size_hint_y: None; height: self.minimum_height; spacing: 5
-    Button: text: "추가"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: root.add_item()
-    Button: text: "닫기"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'slot_menu'
+        BoxLayout:
+            id: cont
+            orientation: 'vertical'
+            size_hint_y: None
+            height: self.minimum_height
+            spacing: 5
+    Button:
+        text: "추가"
+        font_name: 'KFont' if USE_FONT else None
+        size_hint_y: None
+        height: '60dp'
+        on_release: root.add_item()
+    Button:
+        text: "닫기"
+        font_name: 'KFont' if USE_FONT else None
+        size_hint_y: None
+        height: '60dp'
+        on_release: app.root.current = 'slot_menu'
 
 <PhotoScreen>:
-    BoxLayout: orientation: 'vertical'; padding: 20
-    Label: text: "사진 관리"; font_name: 'KFont' if USE_FONT else None
-    Button: text: "뒤로"; font_name: 'KFont' if USE_FONT else None; size_hint_y: None; height: '60dp'; on_release: app.root.current = 'slot_menu'
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+    Label:
+        text: "사진 관리"
+        font_name: 'KFont' if USE_FONT else None
+    Button:
+        text: "뒤로"
+        font_name: 'KFont' if USE_FONT else None
+        size_hint_y: None
+        height: '60dp'
+        on_release: app.root.current = 'slot_menu'
 '''
 
 class PristonApp(App):
     def build(self):
-        write_log("앱 빌드(Build) 성공")
+        write_log("앱 빌드(Build) 재시작")
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
         return Builder.load_string(KV)
     def save_data(self): DataStore.save(self.user_data)
-    def set_mode(self, m): self.root.get_screen('list_edit').mode = m; self.root.current = 'list_edit'
+    def set_mode(self, m): 
+        self.root.get_screen('list_edit').mode = m
+        self.root.current = 'list_edit'
 
 if __name__ == "__main__":
     PristonApp().run()
