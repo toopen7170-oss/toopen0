@@ -1,7 +1,7 @@
 import os, sys, traceback, json, time
 from datetime import datetime
 
-# [블랙박스 엔진: PristonTale 물리 각인형 시스템 - 절대 보존 영역]
+# [블랙박스 엔진: PristonTale 물리 각인형 시스템 - 절대 보존/수정 금지]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
@@ -18,7 +18,7 @@ def write_blackbox(msg):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
             f.flush()
-            os.fsync(f.fileno()) # 물리적 강제 각인
+            os.fsync(f.fileno()) # 물리적 강제 저장
     except: pass
 
 def global_crash_handler(exctype, value, tb):
@@ -29,23 +29,26 @@ def global_crash_handler(exctype, value, tb):
 sys.excepthook = global_crash_handler
 write_blackbox(">>> 시스템 엔진 가동 <<<")
 
-# [안드로이드 5대 권한 자동 요청 시스템]
+# [안드로이드 5대 권한 수리 버전]
 from kivy.utils import platform
 if platform == 'android':
-    from android.permissions import request_permissions, Permission
-    request_permissions([
-        Permission.READ_EXTERNAL_STORAGE,
-        Permission.WRITE_EXTERNAL_STORAGE,
-        Permission.READ_MEDIA_IMAGES,
-        Permission.MANAGE_EXTERNAL_STORAGE,
-        Permission.INTERNET
-    ])
+    from android.permissions import request_permissions
+    # AttributeError 방지를 위해 직접 문자열로 권한 요청
+    perms = [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+    ]
+    request_permissions(perms)
+    write_blackbox("권한 요청 리스트 전송 완료")
 
-# [Kivy 환경 및 그래픽 최적화]
+# [Kivy 환경 최적화]
 from kivy.config import Config
 Config.set('graphics', 'multisamples', '0')
 Config.set('graphics', 'maxfps', '60')
-Config.set('kivy', 'keyboard_mode', 'systemanddock') # 자동 스크롤 대응
+Config.set('kivy', 'keyboard_mode', 'systemanddock')
 
 from kivy.app import App
 from kivy.lang import Builder
@@ -64,7 +67,7 @@ from kivy.utils import get_color_from_hex
 if os.path.exists("font.ttf"):
     LabelBase.register(name="KFont", fn_regular="font.ttf")
 
-# [제1원칙 데이터 구조]
+# [데이터 매니저]
 class DataStore:
     FILE = "PristonTale_Data.json"
     @staticmethod
@@ -95,8 +98,8 @@ def show_confirm(title, msg, on_yes):
     n_btn.bind(on_release=popup.dismiss)
     popup.open()
 
-# [7대 화면 클래스 구현]
-class MainScreen(Screen): # 계정생성창
+# [7대 화면 클래스 - 제1원칙 준수]
+class MainScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.2)
     def refresh(self, dt):
         self.ids.acc_list.clear_widgets()
@@ -105,7 +108,7 @@ class MainScreen(Screen): # 계정생성창
         for aid in data:
             if search_text in aid.lower():
                 row = BoxLayout(size_hint_y=None, height="70dp", spacing=10)
-                btn = Button(text=aid, background_color=get_color_from_hex("#2E7D32"))
+                btn = Button(text=aid, background_color=get_color_from_hex("#2E7D32"), halign='center')
                 btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
                 del_btn = Button(text="삭제", size_hint_x=0.2, background_color=get_color_from_hex("#C62828"))
                 del_btn.bind(on_release=lambda x, a=aid: show_confirm("삭제", f"'{a}'를 삭제하시겠습니까?", lambda: self.del_acc(a)))
@@ -113,8 +116,7 @@ class MainScreen(Screen): # 계정생성창
                 self.ids.acc_list.add_widget(row)
     def add_acc(self):
         aid = self.ids.new_acc.text.strip()
-        if aid:
-            show_confirm("저장", f"'{aid}' 계정을 생성하시겠습니까?", lambda: self._add(aid))
+        if aid: show_confirm("저장", f"'{aid}' 계정을 생성하시겠습니까?", lambda: self._add(aid))
     def _add(self, aid):
         app = App.get_running_app()
         if aid not in app.user_data["accounts"]:
@@ -126,23 +128,22 @@ class MainScreen(Screen): # 계정생성창
     def go_acc(self, aid):
         App.get_running_app().cur_acc = aid; self.manager.current = 'char_select'
 
-class CharSelectScreen(Screen): # 케릭선택창
+class CharSelectScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.build, 0.2)
     def build(self, dt):
         self.ids.grid.clear_widgets()
         acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
             name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
-            btn = Button(text=name, background_color=get_color_from_hex("#2E7D32"))
+            btn = Button(text=name, background_color=get_color_from_hex("#2E7D32"), halign='center')
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, i):
         App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
-class SlotMenuScreen(Screen): pass # 5개 버튼 메뉴 (정보, 장비, 인벤, 사진, 보관소)
+class SlotMenuScreen(Screen): pass
 
-class InfoScreen(Screen): # 케릭정보창 (18개)
-    # 제1원칙 구조 고정
+class InfoScreen(Screen):
     structure = [['이름','직위','클랜','레벨'],['생명력','기력','근력'],['힘','정신력','재능','민첩','건강'],['명중','공격','방어','흡수','속도']]
     def on_enter(self): Clock.schedule_once(self.build, 0.2)
     def build(self, dt):
@@ -152,22 +153,21 @@ class InfoScreen(Screen): # 케릭정보창 (18개)
             for f in gp:
                 row = BoxLayout(size_hint_y=None, height="60dp", spacing=10)
                 row.add_widget(Label(text=f, size_hint_x=0.3, font_name="KFont" if os.path.exists("font.ttf") else None))
-                inp = TextInput(text=str(data.get(f, "")), multiline=False, halign='center')
+                inp = TextInput(text=str(data.get(f, "")), multiline=False, halign='center', padding_y=(15, 15))
                 inp.bind(text=lambda inst, v, f=f: self.update(f, v))
-                row.add_widget(inp)
-                self.ids.cont.add_widget(row)
-            if i < len(self.structure)-1: # (한칸 띄어주고) 시각적 처리
+                row.add_widget(inp); self.ids.cont.add_widget(row)
+            if i < len(self.structure)-1:
                 self.ids.cont.add_widget(BoxLayout(size_hint_y=None, height="30dp"))
     def update(self, f, v):
         App.get_running_app().get_cur_data()["info"][f] = v
+        if f == "이름": pass # 케릭선택창 자동 반영은 로드 시 수행됨
         App.get_running_app().save_data()
     def clear_all(self):
         show_confirm("삭제", "전체 내용을 삭제하시겠습니까?", self._clear)
     def _clear(self):
-        App.get_running_app().get_cur_data()["info"] = {}
-        App.get_running_app().save_data(); self.build(0)
+        App.get_running_app().get_cur_data()["info"] = {}; App.get_running_app().save_data(); self.build(0)
 
-class EquipScreen(Screen): # 케릭장비창 (11개)
+class EquipScreen(Screen):
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self): Clock.schedule_once(self.build, 0.2)
     def build(self, dt):
@@ -176,39 +176,38 @@ class EquipScreen(Screen): # 케릭장비창 (11개)
         for f in self.fields:
             row = BoxLayout(size_hint_y=None, height="60dp", spacing=10)
             row.add_widget(Label(text=f, size_hint_x=0.3, font_name="KFont" if os.path.exists("font.ttf") else None))
-            inp = TextInput(text=str(data.get(f, "")), multiline=False, halign='center')
+            inp = TextInput(text=str(data.get(f, "")), multiline=False, halign='center', padding_y=(15, 15))
             inp.bind(text=lambda inst, v, f=f: self.update(f, v))
-            row.add_widget(inp)
-            self.ids.cont.add_widget(row)
+            row.add_widget(inp); self.ids.cont.add_widget(row)
     def update(self, f, v):
         App.get_running_app().get_cur_data()["equip"][f] = v
         App.get_running_app().save_data()
     def clear_all(self):
         show_confirm("삭제", "장비 정보를 전체 삭제하시겠습니까?", lambda: [App.get_running_app().get_cur_data().update({"equip":{}}), App.get_running_app().save_data(), self.build(0)])
 
-class InventoryScreen(Screen): # 인벤토리창
+class InventoryScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.2)
     def refresh(self, dt):
         self.ids.list.clear_widgets()
         items = App.get_running_app().get_cur_data()["inv"]
         for i, val in enumerate(items):
             row = BoxLayout(size_hint_y=None, height="60dp")
-            btn = Button(text=val[:20]+"...", background_color=get_color_from_hex("#2E7D32"))
+            btn = Button(text=val[:20], background_color=get_color_from_hex("#2E7D32"), halign='center')
             btn.bind(on_release=lambda x, v=val, idx=i: self.detail(v, idx))
-            row.add_widget(btn)
-            self.ids.list.add_widget(row)
+            row.add_widget(btn); self.ids.list.add_widget(row)
     def add_item(self):
-        App.get_running_app().get_cur_data()["inv"].append("새 아이템")
+        App.get_running_app().get_cur_data()["inv"].append("새 항목")
         App.get_running_app().save_data(); self.refresh(0)
     def detail(self, v, idx):
-        content = BoxLayout(orientation='vertical')
-        inp = TextInput(text=v)
-        btns = BoxLayout(size_hint_y=0.2)
-        s_btn = Button(text="저장"); d_btn = Button(text="삭제", background_color=get_color_from_hex("#C62828"))
+        content = BoxLayout(orientation='vertical', padding=10, spacing=10)
+        inp = TextInput(text=v, halign='center')
+        btns = BoxLayout(size_hint_y=0.3, spacing=10)
+        s_btn = Button(text="저장", background_color=get_color_from_hex("#2E7D32"))
+        d_btn = Button(text="삭제", background_color=get_color_from_hex("#C62828"))
         btns.add_widget(s_btn); btns.add_widget(d_btn)
         content.add_widget(inp); content.add_widget(btns)
-        pop = Popup(title="상세보기", content=content)
-        s_btn.bind(on_release=lambda x: [self.save(idx, inp.text), pop.dismiss()])
+        pop = Popup(title="상세보기", content=content, size_hint=(0.9, 0.6))
+        s_btn.bind(on_release=lambda x: show_confirm("저장", "저장하시겠습니까?", lambda: [self.save(idx, inp.text), pop.dismiss()]))
         d_btn.bind(on_release=lambda x: show_confirm("삭제", "삭제하시겠습니까?", lambda: [self.delete(idx), pop.dismiss()]))
         pop.open()
     def save(self, idx, text):
@@ -218,14 +217,27 @@ class InventoryScreen(Screen): # 인벤토리창
         App.get_running_app().get_cur_data()["inv"].pop(idx)
         App.get_running_app().save_data(); self.refresh(0)
 
-class PhotoScreen(Screen): # 사진선택창 (업로드/다운로드)
-    def on_enter(self): write_blackbox("PhotoScreen 권한 확인 필요")
-    # 권한 허용 및 파일 선택기 연동 (안드로이드 네이티브 호출부 생략 - 구조유지)
-    pass
+class PhotoScreen(Screen): pass
+class StorageScreen(InventoryScreen):
+    def refresh(self, dt):
+        self.ids.list.clear_widgets()
+        items = App.get_running_app().get_cur_data()["storage"]
+        for i, val in enumerate(items):
+            row = BoxLayout(size_hint_y=None, height="60dp")
+            btn = Button(text=val[:20], background_color=get_color_from_hex("#2E7D32"), halign='center')
+            btn.bind(on_release=lambda x, v=val, idx=i: self.detail(v, idx))
+            row.add_widget(btn); self.ids.list.add_widget(row)
+    def add_item(self):
+        App.get_running_app().get_cur_data()["storage"].append("보관 항목")
+        App.get_running_app().save_data(); self.refresh(0)
+    def save(self, idx, text):
+        App.get_running_app().get_cur_data()["storage"][idx] = text
+        App.get_running_app().save_data(); self.refresh(0)
+    def delete(self, idx):
+        App.get_running_app().get_cur_data()["storage"].pop(idx)
+        App.get_running_app().save_data(); self.refresh(0)
 
-class StorageScreen(InventoryScreen): pass # 저장보관소 (인벤토리 구조 상속)
-
-# [KV 레이아웃 - 제1원칙 고정 디자인]
+# [KV 레이아웃 - 제1원칙 고정]
 KV = '''
 #:import exists os.path.exists
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -272,6 +284,7 @@ ScreenManager:
             hint_text: "전체 검색 (계정/케릭)"
             size_hint_y: None
             height: '50dp'
+            halign: 'center'
             on_text: root.refresh(0)
         ScrollView:
             BoxLayout:
@@ -283,35 +296,44 @@ ScreenManager:
         BoxLayout:
             size_hint_y: None
             height: '60dp'
+            spacing: 10
             TextInput:
                 id: new_acc
                 hint_text: "새 계정 ID"
+                halign: 'center'
             Button:
                 text: "생성"
+                background_color: 0.18, 0.49, 0.2, 1
                 on_release: root.add_acc()
 
 <SlotMenuScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 40
+        padding: 50
         spacing: 20
         Button:
             text: "케릭정보창"
+            background_color: 0.18, 0.49, 0.2, 1
             on_release: root.manager.current = 'info'
         Button:
             text: "케릭장비창"
+            background_color: 0.18, 0.49, 0.2, 1
             on_release: root.manager.current = 'equip'
         Button:
             text: "인벤토리창"
+            background_color: 0.18, 0.49, 0.2, 1
             on_release: root.manager.current = 'inv'
         Button:
             text: "사진선택창"
+            background_color: 0.18, 0.49, 0.2, 1
             on_release: root.manager.current = 'photo'
         Button:
             text: "저장보관소"
+            background_color: 0.18, 0.49, 0.2, 1
             on_release: root.manager.current = 'storage'
         Button:
             text: "뒤로"
+            background_color: 0.78, 0.16, 0.16, 1
             on_release: root.manager.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>, <InventoryScreen>, <PhotoScreen>, <StorageScreen>:
@@ -333,18 +355,36 @@ ScreenManager:
             spacing: 10
             Button:
                 text: "전체삭제" if root.name in ['info','equip'] else "추가"
-                background_color: get_color_from_hex("#C62828") if root.name in ['info','equip'] else get_color_from_hex("#2E7D32")
+                background_color: 0.78, 0.16, 0.16, 1 if root.name in ['info','equip'] else 0.18, 0.49, 0.2, 1
                 on_release: root.clear_all() if root.name in ['info','equip'] else root.add_item()
             Button:
                 text: "뒤로"
+                background_color: 0.5, 0.5, 0.5, 1
                 on_release: root.manager.current = 'slot_menu'
+
+<CharSelectScreen>:
+    BoxLayout:
+        orientation: 'vertical'
+        padding: 20
+        Label:
+            text: "캐릭터 선택"
+            size_hint_y: 0.1
+            font_name: 'KFont' if exists('font.ttf') else None
+        GridLayout:
+            id: grid
+            cols: 2
+            spacing: 15
+        Button:
+            text: "뒤로"
+            size_hint_y: 0.15
+            on_release: root.manager.current = 'main'
 '''
 
 class PristonApp(App):
     def build(self):
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
-        Window.softinput_mode = 'below_target' # 자동 스크롤 핵심
+        Window.softinput_mode = 'below_target' # 자판 대응 자동 스크롤
         return Builder.load_string(KV)
     def get_cur_data(self): return self.user_data["accounts"][self.cur_acc][self.cur_slot]
     def save_data(self): DataStore.save(self.user_data)
