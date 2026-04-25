@@ -18,7 +18,7 @@ def write_blackbox(msg):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
             f.flush()
-            os.fsync(f.fileno())
+            os.fsync(f.fileno()) # 물리적 저장 강제
     except: pass
 
 def global_crash_handler(exctype, value, tb):
@@ -27,7 +27,7 @@ def global_crash_handler(exctype, value, tb):
     sys.exit(1)
 
 sys.excepthook = global_crash_handler
-write_blackbox(">>> 시스템 엔진 가동 (전환효과 수리 통합본) <<<")
+write_blackbox(">>> 시스템 엔진 가동 (최종 무결점 통합본) <<<")
 
 # [2. 환경 오류 수리: 안드로이드 14 대응]
 from kivy.utils import platform
@@ -72,7 +72,7 @@ class DataStore:
         except Exception as e:
             write_blackbox(f"데이터 저장 실패: {e}")
 
-# [4. 7대 화면 클래스 및 29개 세부목록 원칙 준수]
+# [4. 7대 화면 클래스 - 절대 규칙 준수]
 class MainScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
@@ -112,6 +112,7 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
+    # 18개 세부 목록
     fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','기타']
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -128,6 +129,7 @@ class InfoScreen(Screen):
         App.get_running_app().save_data()
 
 class EquipScreen(Screen):
+    # 11개 세부 목록
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -156,6 +158,7 @@ class InventoryScreen(Screen):
         App.get_running_app().save_data(); self.refresh(0)
 
 class PhotoScreen(Screen): pass
+
 class StorageScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
@@ -168,7 +171,7 @@ class StorageScreen(Screen):
         App.get_running_app().get_cur_data()["storage"].append("보관 항목")
         App.get_running_app().save_data(); self.refresh(0)
 
-# [5. KV 레이아웃 - NameError 박멸 (os 및 FadeTransition 주입)]
+# [5. KV 레이아웃 - 모듈 주입 및 ID 충돌 박멸]
 KV = '''
 #:import os os
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
