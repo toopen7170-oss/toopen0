@@ -1,7 +1,7 @@
 import os, sys, traceback, json, time
 from datetime import datetime
 
-# [1. 블랙박스 엔진: PristonTale 물리 각인형 시스템 - 절대 보존]
+# [1. 블랙박스 엔진: PristonTale 물리 각인형 시스템]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
@@ -18,7 +18,7 @@ def write_blackbox(msg):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
             f.flush()
-            os.fsync(f.fileno()) # 물리적 강제 저장
+            os.fsync(f.fileno())
     except: pass
 
 def global_crash_handler(exctype, value, tb):
@@ -27,23 +27,17 @@ def global_crash_handler(exctype, value, tb):
     sys.exit(1)
 
 sys.excepthook = global_crash_handler
-write_blackbox(">>> 시스템 엔진 가동 (무결점 통합본) <<<")
+write_blackbox(">>> 시스템 엔진 가동 (KV 수리 통합본) <<<")
 
 # [2. 환경 오류 수리: 안드로이드 14 권한 및 폰트 대응]
 from kivy.utils import platform
 if platform == 'android':
     from android.permissions import request_permissions
-    perms = [
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.MANAGE_EXTERNAL_STORAGE"
-    ]
+    perms = ["android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", 
+             "android.permission.READ_MEDIA_IMAGES", "android.permission.MANAGE_EXTERNAL_STORAGE"]
     request_permissions(perms)
-    write_blackbox("권한 요청 리스트 전송 완료")
 
 from kivy.config import Config
-# 폰트 에러 방지: 시스템 기본 폰트로 안전하게 우회
 Config.set('kivy', 'text', 'sdl2')
 Config.set('graphics', 'multisamples', '0')
 
@@ -54,7 +48,6 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.textinput import TextInput
-from kivy.uix.popup import Popup
 from kivy.core.window import Window
 from kivy.clock import Clock
 from kivy.utils import get_color_from_hex
@@ -79,7 +72,7 @@ class DataStore:
         except Exception as e:
             write_blackbox(f"데이터 저장 실패: {e}")
 
-# [4. 7대 화면 클래스 - ID 고유화 및 제1원칙 준수]
+# [4. 화면 클래스 정의]
 class MainScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
@@ -123,7 +116,6 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # 18개 세부 목록 정밀 구현
     fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','기타']
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -140,7 +132,6 @@ class InfoScreen(Screen):
         App.get_running_app().save_data()
 
 class EquipScreen(Screen):
-    # 11개 세부 목록 정밀 구현
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -168,8 +159,7 @@ class InventoryScreen(Screen):
         App.get_running_app().get_cur_data()["inv"].append("새 아이템")
         App.get_running_app().save_data(); self.refresh(0)
 
-class PhotoScreen(Screen):
-    def on_enter(self): write_blackbox("사진선택창 진입 확인")
+class PhotoScreen(Screen): pass
 
 class StorageScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
@@ -183,8 +173,9 @@ class StorageScreen(Screen):
         App.get_running_app().get_cur_data()["storage"].append("보관 항목")
         App.get_running_app().save_data(); self.refresh(0)
 
-# [5. KV 레이아웃 - ID 충돌 박멸 및 스크롤 최적화]
+# [5. KV 레이아웃 - NameError 수리: #:import os os 추가]
 KV = '''
+#:import os os
 <Screen>:
     canvas.before:
         Color:
@@ -222,7 +213,6 @@ ScreenManager:
             text: "PristonTale"
             font_size: '35sp'
             size_hint_y: 0.15
-            color: (1, 1, 1, 1)
         ScrollView:
             BoxLayout:
                 id: acc_list_box
@@ -236,7 +226,7 @@ ScreenManager:
             spacing: 10
             TextInput:
                 id: new_acc_input
-                hint_text: "새 계정 ID 입력"
+                hint_text: "계정 ID 입력"
                 multiline: False
                 halign: 'center'
             Button:
@@ -381,7 +371,7 @@ class PristonApp(App):
     def build(self):
         self.user_data = DataStore.load()
         self.cur_acc = ""; self.cur_slot = ""
-        Window.softinput_mode = 'below_target' # 자판 대응
+        Window.softinput_mode = 'below_target'
         return Builder.load_string(KV)
     def get_cur_data(self):
         return self.user_data["accounts"][self.cur_acc][self.cur_slot]
