@@ -1,22 +1,22 @@
 import os, sys, traceback, json, time
 from datetime import datetime
 
-# [1. 블랙박스 엔진: PristonTale 물리 각인형 시스템]
+# [1. 블랙박스 엔진: 팅김 전 화면 기록 및 물리 각인 시스템]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
         if not os.path.exists(os.path.dirname(path)): return "PristonTale_BlackBox.txt"
-        with open(path, "a", encoding="utf-8") as f: pass
         return path
     except: return "PristonTale_BlackBox.txt"
 
 LOG_FILE = get_download_path()
+LAST_SCREEN = "Unknown"
 
 def write_blackbox(msg):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
+            f.write(f"\n[{timestamp}] [최종화면: {LAST_SCREEN}] {msg}\n{'-'*60}\n")
             f.flush()
             os.fsync(f.fileno())
     except: pass
@@ -27,10 +27,28 @@ def global_crash_handler(exctype, value, tb):
     sys.exit(1)
 
 sys.excepthook = global_crash_handler
-write_blackbox(">>> 시스템 엔진 가동 (표준화 및 전수 검사 완료본) <<<")
+write_blackbox(">>> 시스템 엔진 가동 (폰트 수리 및 삭제 로직 통합본) <<<")
 
-# [2. 환경 오류 수리: 안드로이드 14 및 권한 체계]
+# [2. 환경 오류 수리: 안드로이드 한글 폰트 복구 시스템]
 from kivy.utils import platform
+from kivy.core.text import LabelBase
+
+def register_korean_font():
+    # 안드로이드 시스템 폰트 경로 탐색
+    font_paths = [
+        "/system/fonts/NanumGothic.ttf",
+        "/system/fonts/DroidSansFallback.ttf",
+        "/system/fonts/NotoSansCJK-Regular.ttc",
+        "/system/fonts/AppleSDGothicNeo-Regular.ttf"
+    ]
+    for path in font_paths:
+        if os.path.exists(path):
+            LabelBase.register(name="K-Font", fn_regular=path)
+            return path
+    return None
+
+FONT_PATH = register_korean_font()
+
 if platform == 'android':
     from android.permissions import request_permissions
     perms = ["android.permission.READ_EXTERNAL_STORAGE", "android.permission.WRITE_EXTERNAL_STORAGE", 
@@ -39,7 +57,8 @@ if platform == 'android':
 
 from kivy.config import Config
 Config.set('kivy', 'text', 'sdl2')
-Config.set('graphics', 'multisamples', '0')
+if FONT_PATH:
+    Config.set('kivy', 'default_font', ['K-Font', FONT_PATH])
 
 from kivy.app import App
 from kivy.lang import Builder
@@ -72,27 +91,26 @@ class DataStore:
         except Exception as e:
             write_blackbox(f"데이터 저장 실패: {e}")
 
-# [4. 7대 화면 클래스 - 절대 규칙 및 29개 세부항목 유지]
+# [4. 7대 화면 클래스 - 절대 규칙 준수]
 class MainScreen(Screen):
-    def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
+    def on_enter(self): 
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.refresh, 0.1)
+    
     def refresh(self, dt):
         self.ids.acc_list_box.clear_widgets()
         data = App.get_running_app().user_data.get("accounts", {})
         for aid in data:
             row = BoxLayout(size_hint_y=None, height="70dp", spacing=10)
-            btn = Button(
-                text=aid, 
-                background_color=get_color_from_hex("#2E7D32")
-            )
+            btn = Button(text=aid, background_color=get_color_from_hex("#2E7D32"))
             btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
-            del_btn = Button(
-                text="X", 
-                size_hint_x=0.2, 
-                background_color=get_color_from_hex("#C62828")
-            )
+            
+            del_btn = Button(text="X", size_hint_x=0.2, background_color=get_color_from_hex("#C62828"))
             del_btn.bind(on_release=lambda x, a=aid: self.del_acc(a))
+            
             row.add_widget(btn); row.add_widget(del_btn)
             self.ids.acc_list_box.add_widget(row)
+
     def add_acc(self):
         aid = self.ids.new_acc_input.text.strip()
         if aid:
@@ -100,30 +118,39 @@ class MainScreen(Screen):
             if aid not in app.user_data["accounts"]:
                 app.user_data["accounts"][aid] = {str(i): {"info":{}, "equip":{}, "inv":[], "pics":[], "storage":[]} for i in range(1, 7)}
                 app.save_data(); self.refresh(0); self.ids.new_acc_input.text = ""
+
+    def del_acc(self, aid):
+        app = App.get_running_app()
+        if aid in app.user_data["accounts"]:
+            del app.user_data["accounts"][aid]
+            app.save_data(); self.refresh(0)
+
     def go_acc(self, aid):
         App.get_running_app().cur_acc = aid; self.manager.current = 'char_select'
 
 class CharSelectScreen(Screen):
-    def on_enter(self): Clock.schedule_once(self.build, 0.1)
+    def on_enter(self):
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
         self.ids.char_slot_grid.clear_widgets()
         acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
             name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
-            btn = Button(
-                text=name, 
-                background_color=get_color_from_hex("#1B5E20")
-            )
+            btn = Button(text=name, background_color=get_color_from_hex("#1B5E20"))
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.char_slot_grid.add_widget(btn)
     def go_slot(self, i):
         App.get_running_app().cur_slot = str(i); self.manager.current = 'slot_menu'
 
-class SlotMenuScreen(Screen): pass
+class SlotMenuScreen(Screen):
+    def on_enter(self): global LAST_SCREEN; LAST_SCREEN = self.name
 
 class InfoScreen(Screen):
     fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','기타']
-    def on_enter(self): Clock.schedule_once(self.build, 0.1)
+    def on_enter(self):
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
         self.ids.info_scroll_box.clear_widgets()
         data = App.get_running_app().get_cur_data()["info"]
@@ -139,7 +166,9 @@ class InfoScreen(Screen):
 
 class EquipScreen(Screen):
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
-    def on_enter(self): Clock.schedule_once(self.build, 0.1)
+    def on_enter(self):
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
         self.ids.equip_scroll_box.clear_widgets()
         data = App.get_running_app().get_cur_data()["equip"]
@@ -154,42 +183,37 @@ class EquipScreen(Screen):
         App.get_running_app().save_data()
 
 class InventoryScreen(Screen):
-    def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
+    def on_enter(self): 
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
         self.ids.inv_list_box.clear_widgets()
         items = App.get_running_app().get_cur_data()["inv"]
         for val in items:
-            btn = Button(
-                text=val[:20], 
-                size_hint_y=None, 
-                height="60dp", 
-                background_color=get_color_from_hex("#2E7D32")
-            )
+            btn = Button(text=val[:20], size_hint_y=None, height="60dp", background_color=get_color_from_hex("#2E7D32"))
             self.ids.inv_list_box.add_widget(btn)
     def add_item(self):
         App.get_running_app().get_cur_data()["inv"].append("새 아이템")
         App.get_running_app().save_data(); self.refresh(0)
 
-class PhotoScreen(Screen): pass
+class PhotoScreen(Screen):
+    def on_enter(self): global LAST_SCREEN; LAST_SCREEN = self.name
 
 class StorageScreen(Screen):
-    def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
+    def on_enter(self):
+        global LAST_SCREEN; LAST_SCREEN = self.name
+        Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
         self.ids.storage_list_box.clear_widgets()
         items = App.get_running_app().get_cur_data()["storage"]
         for val in items:
-            btn = Button(
-                text=val[:20], 
-                size_hint_y=None, 
-                height="60dp", 
-                background_color=get_color_from_hex("#455A64")
-            )
+            btn = Button(text=val[:20], size_hint_y=None, height="60dp", background_color=get_color_from_hex("#455A64"))
             self.ids.storage_list_box.add_widget(btn)
     def add_item(self):
         App.get_running_app().get_cur_data()["storage"].append("보관 항목")
         App.get_running_app().save_data(); self.refresh(0)
 
-# [5. KV 레이아웃 - 한 줄 표기법 표준화 완료]
+# [5. KV 레이아웃 - 한 줄 표기법 완전 박멸]
 KV = '''
 #:import os os
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
