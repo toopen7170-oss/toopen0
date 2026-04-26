@@ -18,7 +18,7 @@ def write_blackbox(msg):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
             f.flush()
-            os.fsync(f.fileno()) # 물리적 저장 강제
+            os.fsync(f.fileno())
     except: pass
 
 def global_crash_handler(exctype, value, tb):
@@ -27,9 +27,9 @@ def global_crash_handler(exctype, value, tb):
     sys.exit(1)
 
 sys.excepthook = global_crash_handler
-write_blackbox(">>> 시스템 엔진 가동 (최종 무결점 통합본) <<<")
+write_blackbox(">>> 시스템 엔진 가동 (표준화 및 전수 검사 완료본) <<<")
 
-# [2. 환경 오류 수리: 안드로이드 14 대응]
+# [2. 환경 오류 수리: 안드로이드 14 및 권한 체계]
 from kivy.utils import platform
 if platform == 'android':
     from android.permissions import request_permissions
@@ -72,7 +72,7 @@ class DataStore:
         except Exception as e:
             write_blackbox(f"데이터 저장 실패: {e}")
 
-# [4. 7대 화면 클래스 - 절대 규칙 준수]
+# [4. 7대 화면 클래스 - 절대 규칙 및 29개 세부항목 유지]
 class MainScreen(Screen):
     def on_enter(self): Clock.schedule_once(self.refresh, 0.1)
     def refresh(self, dt):
@@ -80,9 +80,16 @@ class MainScreen(Screen):
         data = App.get_running_app().user_data.get("accounts", {})
         for aid in data:
             row = BoxLayout(size_hint_y=None, height="70dp", spacing=10)
-            btn = Button(text=aid, background_color=get_color_from_hex("#2E7D32"))
+            btn = Button(
+                text=aid, 
+                background_color=get_color_from_hex("#2E7D32")
+            )
             btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
-            del_btn = Button(text="X", size_hint_x=0.2, background_color=get_color_from_hex("#C62828"))
+            del_btn = Button(
+                text="X", 
+                size_hint_x=0.2, 
+                background_color=get_color_from_hex("#C62828")
+            )
             del_btn.bind(on_release=lambda x, a=aid: self.del_acc(a))
             row.add_widget(btn); row.add_widget(del_btn)
             self.ids.acc_list_box.add_widget(row)
@@ -103,7 +110,10 @@ class CharSelectScreen(Screen):
         acc = App.get_running_app().user_data["accounts"][App.get_running_app().cur_acc]
         for i in range(1, 7):
             name = acc[str(i)]["info"].get("이름", f"슬롯 {i}")
-            btn = Button(text=name, background_color=get_color_from_hex("#1B5E20"))
+            btn = Button(
+                text=name, 
+                background_color=get_color_from_hex("#1B5E20")
+            )
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.char_slot_grid.add_widget(btn)
     def go_slot(self, i):
@@ -112,7 +122,6 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # 18개 세부 목록
     fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','기타']
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -129,7 +138,6 @@ class InfoScreen(Screen):
         App.get_running_app().save_data()
 
 class EquipScreen(Screen):
-    # 11개 세부 목록
     fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
     def on_enter(self): Clock.schedule_once(self.build, 0.1)
     def build(self, dt):
@@ -151,7 +159,12 @@ class InventoryScreen(Screen):
         self.ids.inv_list_box.clear_widgets()
         items = App.get_running_app().get_cur_data()["inv"]
         for val in items:
-            btn = Button(text=val[:20], size_hint_y=None, height="60dp", background_color=get_color_from_hex("#2E7D32"))
+            btn = Button(
+                text=val[:20], 
+                size_hint_y=None, 
+                height="60dp", 
+                background_color=get_color_from_hex("#2E7D32")
+            )
             self.ids.inv_list_box.add_widget(btn)
     def add_item(self):
         App.get_running_app().get_cur_data()["inv"].append("새 아이템")
@@ -165,13 +178,18 @@ class StorageScreen(Screen):
         self.ids.storage_list_box.clear_widgets()
         items = App.get_running_app().get_cur_data()["storage"]
         for val in items:
-            btn = Button(text=val[:20], size_hint_y=None, height="60dp", background_color=get_color_from_hex("#455A64"))
+            btn = Button(
+                text=val[:20], 
+                size_hint_y=None, 
+                height="60dp", 
+                background_color=get_color_from_hex("#455A64")
+            )
             self.ids.storage_list_box.add_widget(btn)
     def add_item(self):
         App.get_running_app().get_cur_data()["storage"].append("보관 항목")
         App.get_running_app().save_data(); self.refresh(0)
 
-# [5. KV 레이아웃 - 모듈 주입 및 ID 충돌 박멸]
+# [5. KV 레이아웃 - 한 줄 표기법 표준화 완료]
 KV = '''
 #:import os os
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -258,11 +276,21 @@ ScreenManager:
         orientation: 'vertical'
         padding: 40
         spacing: 15
-        Button: text: "케릭정보창"; on_release: root.manager.current = 'info'
-        Button: text: "케릭장비창"; on_release: root.manager.current = 'equip'
-        Button: text: "인벤토리창"; on_release: root.manager.current = 'inv'
-        Button: text: "사진선택창"; on_release: root.manager.current = 'photo'
-        Button: text: "저장보관소"; on_release: root.manager.current = 'storage'
+        Button:
+            text: "케릭정보창"
+            on_release: root.manager.current = 'info'
+        Button:
+            text: "케릭장비창"
+            on_release: root.manager.current = 'equip'
+        Button:
+            text: "인벤토리창"
+            on_release: root.manager.current = 'inv'
+        Button:
+            text: "사진선택창"
+            on_release: root.manager.current = 'photo'
+        Button:
+            text: "저장보관소"
+            on_release: root.manager.current = 'storage'
         Button:
             text: "뒤로가기"
             background_color: (0.7, 0.2, 0.2, 1)
@@ -317,13 +345,18 @@ ScreenManager:
             size_hint_y: None
             height: '50dp'
             spacing: 10
-            Button: text: "추가"; on_release: root.add_item()
-            Button: text: "뒤로"; on_release: root.manager.current = 'slot_menu'
+            Button:
+                text: "추가"
+                on_release: root.add_item()
+            Button:
+                text: "뒤로"
+                on_release: root.manager.current = 'slot_menu'
 
 <PhotoScreen>:
     BoxLayout:
         orientation: 'vertical'
-        Label: text: "사진 선택 시스템 (준비 중)"
+        Label:
+            text: "사진 선택 시스템 (준비 중)"
         Button:
             text: "뒤로가기"
             size_hint_y: 0.1
@@ -344,8 +377,12 @@ ScreenManager:
             size_hint_y: None
             height: '50dp'
             spacing: 10
-            Button: text: "추가"; on_release: root.add_item()
-            Button: text: "뒤로"; on_release: root.manager.current = 'slot_menu'
+            Button:
+                text: "추가"
+                on_release: root.add_item()
+            Button:
+                text: "뒤로"
+                on_release: root.manager.current = 'slot_menu'
 '''
 
 class PristonApp(App):
