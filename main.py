@@ -1,11 +1,11 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 물리적 선제 봉쇄]: 모든 모듈 선행 로드
+# [1. 물리적 선행 각인]
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.core.text import LabelBase
+from kivy.core.text import LabelBase  # Python 영역
 from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
@@ -16,7 +16,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 
-# 클래스 구조 선행 각인
+# 스크린 클래스 선행 각인
 class MainScreen(Screen): pass
 class CharSelectScreen(Screen): pass
 class SlotMenuScreen(Screen): pass
@@ -26,9 +26,8 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [2. 블랙박스 물리 각인 시스템]
+# [2. 블랙박스 엔진]
 EXTERNAL_LOG = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
-
 def write_blackbox(msg):
     try:
         ts = datetime.now().strftime('%H:%M:%S')
@@ -40,10 +39,11 @@ def write_blackbox(msg):
 
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. KV 레이아웃]: 1줄 1속성 엄수 및 폰트 지연 대응
+# [3. KV 레이아웃]: LabelBase 임포트 추가 및 폰트 안전 검사
 KV = '''
 #:import os os
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
+#:import LabelBase kivy.core.text.LabelBase
 
 <Screen>:
     canvas.before:
@@ -55,7 +55,7 @@ KV = '''
             source: 'bg.png' if os.path.exists('bg.png') else ''
 
 <Label>:
-    # 폰트 로드 전까지는 기본 Roboto로 생존
+    # 폰트 로드 전까지는 기본 Roboto로 생존 (LabelBase 인지 완료)
     font_name: 'KFont' if 'KFont' in LabelBase.font_manager.fonts else 'Roboto'
     outline_width: 1
     outline_color: 0, 0, 0, 1
@@ -71,7 +71,7 @@ KV = '''
         padding: '20dp'
         spacing: '15dp'
         Label:
-            text: "PristonTale Manager v49"
+            text: "PristonTale Manager v50"
             font_size: '28sp'
             size_hint_y: 0.15
         ScrollView:
@@ -102,7 +102,6 @@ KV = '''
         Button:
             text: "<< 계정 목록"
             size_hint_y: 0.12
-            background_color: 0.4, 0.4, 0.4, 0.7
             on_release: root.manager.current = 'main'
 
 <SlotMenuScreen>:
@@ -117,16 +116,14 @@ KV = '''
             text: "2. 케릭장비창 (11개 목록)"
             on_release: root.manager.current = 'equip'
         Button:
-            text: "3. 인벤토리창 (상세관리)"
+            text: "3. 인벤토리창"
             on_release: root.manager.current = 'inv'
         Button:
-            text: "4. 사진선택창 (다중업로드)"
+            text: "4. 사진선택창"
             on_release: root.manager.current = 'photo'
         Button:
-            text: "5. 저장보관소 (데이터)"
+            text: "5. 저장보관소"
             on_release: root.manager.current = 'storage'
-        Widget:
-            size_hint_y: 0.1
         Button:
             text: "<< 캐릭터 선택으로"
             background_color: 0.4, 0.4, 0.4, 0.7
@@ -174,17 +171,15 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [4. 앱 엔진: 생존형 지연 시동 및 폰트 격리]
+# [4. 앱 엔진: 보안 격리 시동]
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
-        # build 시점에는 외부 폰트를 절대 건드리지 않음 (오류 원천 봉쇄)
         return Builder.load_string(KV)
 
     def on_start(self):
-        # 2초 지연 후 권한 요청 및 데이터 로드
         Clock.schedule_once(self.deferred_boot, 2.0)
 
     def deferred_boot(self, dt):
@@ -198,28 +193,23 @@ class PristonApp(App):
                     Permission.READ_MEDIA_IMAGES
                 ], self.on_permission_result)
             except: pass
-        else:
-            self.apply_custom_font()
+        else: self.apply_custom_font()
         self.load_data()
 
     def on_permission_result(self, permissions, results):
-        # 권한 승인 결과 확인 후 폰트 적용
-        if all(results):
-            self.apply_custom_font()
+        if all(results): self.apply_custom_font()
 
     def apply_custom_font(self):
         f_path = "/storage/emulated/0/Download/font.ttf"
         if os.path.exists(f_path):
             try:
                 LabelBase.register(name="KFont", fn_regular=f_path)
-                # 폰트 적용을 위해 UI 갱신 유도
-                write_blackbox("Font Engraved Successfully.")
-            except Exception as e:
-                write_blackbox(f"Font Error: {e}")
+                write_blackbox("Font Applied.")
+            except: pass
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v49.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v50.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -227,19 +217,18 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v49.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v50.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
-            write_blackbox("Data Saved.")
         except: pass
 
-# [5. 기능 로직: 제1원칙 (7대 창 및 29개 세부 목록)]
+# [5. 스크린 로직: 목록 물리 각인]
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self):
         self.ids.acc_list.clear_widgets()
         for aid in App.get_running_app().user_data.get("accounts", {}):
-            btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
+            btn = Button(text=f"ID: {aid}", size_hint_y=None, height="60dp")
             btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
             self.ids.acc_list.add_widget(btn)
     def add_acc(self):
@@ -266,21 +255,18 @@ class CharSelectScreen(Screen):
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    # 18개 목록 물리 각인
     fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
     def on_enter(self):
         self.ids.box.clear_widgets()
         for f in self.fields:
             row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
             row.add_widget(Label(text=f, size_hint_x=0.35))
-            row.add_widget(TextInput(hint_text=f"{f} 입력", multiline=False))
+            row.add_widget(TextInput(hint_text="입력", multiline=False))
             self.ids.box.add_widget(row)
     def save_confirm(self):
-        App.get_running_app().save_data()
-        self.manager.current = 'slot_menu'
+        App.get_running_app().save_data(); self.manager.current = 'slot_menu'
 
 class EquipScreen(Screen):
-    # 11개 목록 물리 각인
     items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
     def on_enter(self):
         self.ids.box.clear_widgets()
@@ -290,8 +276,7 @@ class EquipScreen(Screen):
             row.add_widget(TextInput(hint_text="장비 정보", multiline=False))
             self.ids.box.add_widget(row)
     def save_confirm(self):
-        App.get_running_app().save_data()
-        self.manager.current = 'slot_menu'
+        App.get_running_app().save_data(); self.manager.current = 'slot_menu'
 
 class InventoryScreen(Screen):
     def save_confirm(self): self.manager.current = 'slot_menu'
