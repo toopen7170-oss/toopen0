@@ -16,7 +16,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 & 초강력 자가 치유 엔진]
+# [2. 블랙박스 & 자가 치유 엔진]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
 
@@ -29,10 +29,10 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 전역 에러 트래핑: 어떤 치명적 오류도 블랙박스에 가두고 앱은 살려둠
+# 원칙: 어떤 오류도 블랙박스에 기록하고 앱의 물리적 생존을 보장함
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 모든 라인 자가 치유 격벽 설치
+# [3. 스크린 로직]: 모든 라인 자가 치유(Try-Except) 격벽 이식
 class MainScreen(Screen):
     def on_enter(self):
         try:
@@ -137,9 +137,10 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 한 줄 표기법 완전 제거 및 정석 분리
+# [4. KV 레이아웃]: 통신 경로 확보 및 문법 표준화 수복
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
+#:import LabelBase kivy.core.text.LabelBase
 
 <Screen>:
     canvas.before:
@@ -150,6 +151,7 @@ KV = '''
             size: self.size
 
 <Label>:
+    # 수복: 폰트 등록 여부를 확인하여 안전한 기본값 제공
     font_name: 'font' if 'font' in LabelBase.get_registered_designators() else 'Roboto'
     outline_width: 1
     outline_color: 0, 0, 0, 1
@@ -165,7 +167,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v68 (Final)"
+            text: "PristonTale Manager v69"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -283,7 +285,7 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 폰트/이미지 에러 시 자가 수복 로직 탑재
+# [5. 앱 엔진]: 설계도 로딩 단계부터 자가 치유 보호
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
@@ -292,18 +294,17 @@ class PristonApp(App):
         try:
             icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
             if os.path.exists(icon_p): self.icon = icon_p
+            # 수복: KV 로드 시 발생하는 어떤 예외도 포착하여 블랙박스에 기록
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"Critical Parser Healing: {str(e)}")
+            write_blackbox(f"Final Parser Healing: {str(e)}")
+            # 최악의 경우에도 튕기지 않게 빈 매니저라도 반환하여 생존
             return ScreenManager()
 
     def on_start(self):
-        try:
-            self.apply_font()
-            Clock.schedule_once(self.request_android_permissions, 1.0)
-            self.load_data()
-        except Exception as e:
-            write_blackbox(f"OnStart Healing: {str(e)}")
+        self.apply_font()
+        Clock.schedule_once(self.request_android_permissions, 1.0)
+        self.load_data()
 
     def request_android_permissions(self, dt):
         if platform == 'android':
@@ -324,16 +325,13 @@ class PristonApp(App):
         self.apply_background()
 
     def apply_font(self):
-        # 폰트 등록 실패 시 튕기지 않도록 자가 치유 격벽 설치
         try:
             f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
             if os.path.exists(f_p):
                 LabelBase.register(name="font", fn_regular=f_p)
                 write_blackbox("Font Engraved Successfully.")
-            else:
-                write_blackbox("Font file not found, using default.")
         except Exception as e:
-            write_blackbox(f"Font Healing Applied: {str(e)}")
+            write_blackbox(f"Font Load Healing: {str(e)}")
 
     def apply_background(self, *args):
         try:
@@ -349,7 +347,7 @@ class PristonApp(App):
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final_v69.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -358,7 +356,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final_v69.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except Exception as e:
