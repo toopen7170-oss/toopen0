@@ -1,11 +1,11 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 물리적 선행 각인]
+# [1. 물리적 선제 봉쇄]: 모든 모듈 선행 로드
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
-from kivy.core.text import LabelBase  # Python 영역
+from kivy.core.text import LabelBase
 from kivy.core.window import Window
 from kivy.utils import platform
 from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
@@ -16,7 +16,7 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 
-# 스크린 클래스 선행 각인
+# 스크린 클래스 선행 각인 (NameError 방지)
 class MainScreen(Screen): pass
 class CharSelectScreen(Screen): pass
 class SlotMenuScreen(Screen): pass
@@ -26,11 +26,13 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [2. 블랙박스 엔진]
-EXTERNAL_LOG = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
+# [2. 블랙박스 엔진]: 점주님 지정 경로 고정
+DOWNLOAD_PATH = "/storage/emulated/0/Download/"
+EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
+
 def write_blackbox(msg):
     try:
-        ts = datetime.now().strftime('%H:%M:%S')
+        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(EXTERNAL_LOG, "a", encoding="utf-8") as f:
             f.write(f"[{ts}] {msg}\n")
             f.flush()
@@ -39,7 +41,7 @@ def write_blackbox(msg):
 
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. KV 레이아웃]: LabelBase 임포트 추가 및 폰트 안전 검사
+# [3. KV 레이아웃]: 1줄 1속성 및 폰트/전환 인지 완료
 KV = '''
 #:import os os
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -52,10 +54,9 @@ KV = '''
         Rectangle:
             pos: self.pos
             size: self.size
-            source: 'bg.png' if os.path.exists('bg.png') else ''
+            source: '/storage/emulated/0/Download/bg.png' if os.path.exists('/storage/emulated/0/Download/bg.png') else ''
 
 <Label>:
-    # 폰트 로드 전까지는 기본 Roboto로 생존 (LabelBase 인지 완료)
     font_name: 'KFont' if 'KFont' in LabelBase.font_manager.fonts else 'Roboto'
     outline_width: 1
     outline_color: 0, 0, 0, 1
@@ -124,6 +125,8 @@ KV = '''
         Button:
             text: "5. 저장보관소"
             on_release: root.manager.current = 'storage'
+        Widget:
+            size_hint_y: 0.1
         Button:
             text: "<< 캐릭터 선택으로"
             background_color: 0.4, 0.4, 0.4, 0.7
@@ -171,18 +174,24 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [4. 앱 엔진: 보안 격리 시동]
+# [4. 앱 엔진: 생존형 지연 시동 및 리소스 정렬]
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
+        # 아이콘 설정 (존재 시 적용)
+        icon_path = os.path.join(DOWNLOAD_PATH, "icon.png")
+        if os.path.exists(icon_path):
+            self.icon = icon_path
         return Builder.load_string(KV)
 
     def on_start(self):
+        # 2초 후 보안 시퀀스 시작
         Clock.schedule_once(self.deferred_boot, 2.0)
 
     def deferred_boot(self, dt):
+        write_blackbox("System sequence initiated.")
         if platform == 'android':
             try:
                 from android.permissions import request_permissions, Permission
@@ -192,20 +201,26 @@ class PristonApp(App):
                     Permission.MANAGE_EXTERNAL_STORAGE,
                     Permission.READ_MEDIA_IMAGES
                 ], self.on_permission_result)
-            except: pass
-        else: self.apply_custom_font()
+            except Exception as e:
+                write_blackbox(f"Permission Error: {e}")
+        else:
+            self.apply_resources()
         self.load_data()
 
     def on_permission_result(self, permissions, results):
-        if all(results): self.apply_custom_font()
+        if all(results):
+            write_blackbox("All permissions granted.")
+            self.apply_resources()
 
-    def apply_custom_font(self):
-        f_path = "/storage/emulated/0/Download/font.ttf"
+    def apply_resources(self):
+        # 폰트 적용
+        f_path = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_path):
             try:
                 LabelBase.register(name="KFont", fn_regular=f_path)
-                write_blackbox("Font Applied.")
+                write_blackbox("Font.ttf loaded from Download folder.")
             except: pass
+        # 배경화면은 KV의 Canvas에서 os.path.exists 체크를 통해 자동 갱신됩니다.
 
     def load_data(self):
         try:
@@ -213,6 +228,7 @@ class PristonApp(App):
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
+            write_blackbox("User data loaded.")
         except: pass
 
     def save_data(self):
@@ -222,12 +238,13 @@ class PristonApp(App):
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
 
-# [5. 스크린 로직: 목록 물리 각인]
+# [5. 기능 로직: 7대 창 및 29개 세부 목록 물리 각인]
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self):
         self.ids.acc_list.clear_widgets()
-        for aid in App.get_running_app().user_data.get("accounts", {}):
+        data = App.get_running_app().user_data.get("accounts", {})
+        for aid in data:
             btn = Button(text=f"ID: {aid}", size_hint_y=None, height="60dp")
             btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
             self.ids.acc_list.add_widget(btn)
