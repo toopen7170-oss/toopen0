@@ -16,16 +16,6 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# 각 스크린 클래스 개별 정의
-class MainScreen(Screen): pass
-class CharSelectScreen(Screen): pass
-class SlotMenuScreen(Screen): pass
-class InfoScreen(Screen): pass
-class EquipScreen(Screen): pass
-class InventoryScreen(Screen): pass
-class PhotoScreen(Screen): pass
-class StorageScreen(Screen): pass
-
 # [2. 블랙박스 시스템]: 사진 속 그 파일과 연동
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
@@ -39,9 +29,90 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
+# 치명적 오류 발생 시 즉시 블랙박스 기록 (AttributeError 방어)
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. KV 레이아웃]: 폰트/배경 참조를 Python 로직으로 완전 이관 (에러 원천 차단)
+# [3. 스크린 클래스 정의]: 함수 누락 방지를 위한 정밀 각인
+class MainScreen(Screen):
+    def on_enter(self):
+        self.refresh()
+
+    def refresh(self):
+        try:
+            self.ids.acc_list.clear_widgets()
+            app = App.get_running_app()
+            accounts = app.user_data.get("accounts", {})
+            for aid in accounts:
+                btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
+                # lambda 함수 연결 무결성 확보
+                btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
+                self.ids.acc_list.add_widget(btn)
+        except Exception as e:
+            write_blackbox(f"Refresh Error: {str(e)}")
+
+    def add_acc(self):
+        try:
+            aid = datetime.now().strftime('%H%M%S')
+            app = App.get_running_app()
+            if "accounts" not in app.user_data:
+                app.user_data["accounts"] = {}
+            # 6개 슬롯 기본 생성
+            app.user_data["accounts"][aid] = {str(i): {"info": {}, "equip": {}} for i in range(1, 7)}
+            app.save_data()
+            self.refresh()
+            write_blackbox(f"Account {aid} Created.")
+        except Exception as e:
+            write_blackbox(f"Add Acc Error: {str(e)}")
+
+    def go_acc(self, aid):
+        App.get_running_app().cur_acc = aid
+        self.manager.current = 'char_select'
+
+class CharSelectScreen(Screen):
+    def on_enter(self):
+        self.ids.grid.clear_widgets()
+        for i in range(1, 7):
+            btn = Button(text=f"캐릭터 슬롯 {i}")
+            btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
+            self.ids.grid.add_widget(btn)
+
+    def go_slot(self, idx):
+        App.get_running_app().cur_slot = str(idx)
+        self.manager.current = 'slot_menu'
+
+class SlotMenuScreen(Screen): pass
+
+class InfoScreen(Screen):
+    fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
+    def on_enter(self):
+        self.ids.box.clear_widgets()
+        for f in self.fields:
+            row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
+            row.add_widget(Label(text=f, size_hint_x=0.35))
+            row.add_widget(TextInput(hint_text="수치 입력", multiline=False))
+            self.ids.box.add_widget(row)
+    def save_confirm(self):
+        App.get_running_app().save_data()
+        self.manager.current = 'slot_menu'
+
+class EquipScreen(Screen):
+    items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
+    def on_enter(self):
+        self.ids.box.clear_widgets()
+        for i in self.items:
+            row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
+            row.add_widget(Label(text=i, size_hint_x=0.35))
+            row.add_widget(TextInput(hint_text="장비 정보", multiline=False))
+            self.ids.box.add_widget(row)
+    def save_confirm(self):
+        App.get_running_app().save_data()
+        self.manager.current = 'slot_menu'
+
+class InventoryScreen(Screen): pass
+class PhotoScreen(Screen): pass
+class StorageScreen(Screen): pass
+
+# [4. KV 레이아웃]: root 참조 무결성 확보
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -50,12 +121,11 @@ KV = '''
         Color:
             rgba: 1, 1, 1, 1
         Rectangle:
-            id: bg_rect
             pos: self.pos
             size: self.size
 
 <Label>:
-    font_name: 'font'  # 파일명과 동일하게 매칭
+    font_name: 'font'
     outline_width: 1
     outline_color: 0, 0, 0, 1
 
@@ -70,7 +140,7 @@ KV = '''
         padding: '20dp'
         spacing: '15dp'
         Label:
-            text: "PristonTale Manager v60"
+            text: "PristonTale Manager v61"
             font_size: '28sp'
             size_hint_y: 0.15
         ScrollView:
@@ -92,14 +162,14 @@ KV = '''
         padding: '20dp'
         spacing: '15dp'
         Label:
-            id: title_label
+            text: "캐릭터를 선택하세요"
             size_hint_y: 0.1
         GridLayout:
             id: grid
             cols: 2
             spacing: '15dp'
         Button:
-            text: "<< 계정 목록"
+            text: "<< 계정 목록으로"
             size_hint_y: 0.12
             on_release: root.manager.current = 'main'
 
@@ -202,20 +272,18 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [4. 앱 엔진: 자가 진단 및 리소스 동기화]
+# [5. 앱 메인 엔진]
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
-        # 아이콘(icon.png) 선제 적용
         icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
         if os.path.exists(icon_p):
             self.icon = icon_p
         return Builder.load_string(KV)
 
     def on_start(self):
-        # 안드로이드 14 대응: 지연 권한 요청
         Clock.schedule_once(self.request_android_permissions, 1.2)
 
     def request_android_permissions(self, dt):
@@ -235,26 +303,24 @@ class PristonApp(App):
         self.load_data()
 
     def apply_resources(self):
-        # 1. 폰트(font.ttf) 등록: 파일명과 이름을 일치시켜 OSError 방지
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="font", fn_regular=f_p)
-                write_blackbox("Font Engraved Successfully.")
+                write_blackbox("Font Engraved.")
             except: pass
 
-        # 2. 배경화면(bg.png) 강제 주입
         bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
         if os.path.exists(bg_p):
             for sc in self.root.screens:
                 with sc.canvas.before:
                     Color(1, 1, 1, 1)
                     Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
-            write_blackbox("Background Applied Successfully.")
+            write_blackbox("Background Applied.")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v60.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v61.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -262,70 +328,10 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v60.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v61.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
-
-# [5. 기능 로직]
-class MainScreen(Screen):
-    def on_enter(self): self.refresh()
-    def refresh(self):
-        self.ids.acc_list.clear_widgets()
-        for aid in App.get_running_app().user_data.get("accounts", {}):
-            btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
-            btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
-            self.ids.acc_list.add_widget(btn)
-    def add_acc(self):
-        aid = datetime.now().strftime('%H%M%S')
-        app = App.get_running_app()
-        if "accounts" not in app.user_data: app.user_data["accounts"] = {}
-        app.user_data["accounts"][aid] = {str(i):{"info":{}, "equip":{}} for i in range(1,7)}
-        app.save_data(); self.refresh()
-    def go_acc(self, aid):
-        App.get_running_app().cur_acc = aid
-        self.manager.current = 'char_select'
-
-class CharSelectScreen(Screen):
-    def on_enter(self):
-        self.ids.grid.clear_widgets()
-        for i in range(1, 7):
-            btn = Button(text=f"캐릭터 슬롯 {i}")
-            btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
-            self.ids.grid.add_widget(btn)
-    def go_slot(self, idx):
-        App.get_running_app().cur_slot = str(idx)
-        self.manager.current = 'slot_menu'
-
-class SlotMenuScreen(Screen): pass
-
-class InfoScreen(Screen):
-    fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
-    def on_enter(self):
-        self.ids.box.clear_widgets()
-        for f in self.fields:
-            row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
-            row.add_widget(Label(text=f, size_hint_x=0.35))
-            row.add_widget(TextInput(hint_text="수치 입력", multiline=False))
-            self.ids.box.add_widget(row)
-    def save_confirm(self):
-        App.get_running_app().save_data(); self.manager.current = 'slot_menu'
-
-class EquipScreen(Screen):
-    items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
-    def on_enter(self):
-        self.ids.box.clear_widgets()
-        for i in self.items:
-            row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
-            row.add_widget(Label(text=i, size_hint_x=0.35))
-            row.add_widget(TextInput(hint_text="장비 정보", multiline=False))
-            self.ids.box.add_widget(row)
-    def save_confirm(self):
-        App.get_running_app().save_data(); self.manager.current = 'slot_menu'
-
-class InventoryScreen(Screen): pass
-class PhotoScreen(Screen): pass
-class StorageScreen(Screen): pass
 
 if __name__ == "__main__":
     PristonApp().run()
