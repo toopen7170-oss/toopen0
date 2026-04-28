@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 물리적 선제 봉쇄]: 모든 모듈 로드
+# [1. 선행 모듈 각인]
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -17,7 +17,6 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# 스크린 클래스 선행 각인
 class MainScreen(Screen): pass
 class CharSelectScreen(Screen): pass
 class SlotMenuScreen(Screen): pass
@@ -27,13 +26,13 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [2. 블랙박스 엔진]
+# [2. 블랙박스]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
 
 def write_blackbox(msg):
     try:
-        ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        ts = datetime.now().strftime('%H:%M:%S')
         with open(EXTERNAL_LOG, "a", encoding="utf-8") as f:
             f.write(f"[{ts}] {msg}\n")
             f.flush()
@@ -42,7 +41,7 @@ def write_blackbox(msg):
 
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. KV 레이아웃]: 리소스 로딩을 Python에 전적으로 위임
+# [3. KV 레이아웃]: 1줄 1선언 원칙을 "극단적으로" 준수
 KV = '''
 #:import LabelBase kivy.core.text.LabelBase
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
@@ -72,7 +71,7 @@ KV = '''
         padding: '20dp'
         spacing: '15dp'
         Label:
-            text: "PristonTale Manager v52"
+            text: "PristonTale Manager v54"
             font_size: '28sp'
             size_hint_y: 0.15
         ScrollView:
@@ -156,80 +155,73 @@ KV = '''
 
 ScreenManager:
     transition: FadeTransition()
-    MainScreen: name: 'main'
-    CharSelectScreen: name: 'char_select'
-    SlotMenuScreen: name: 'slot_menu'
-    InfoScreen: name: 'info'
-    EquipScreen: name: 'equip'
-    InventoryScreen: name: 'inv'
-    PhotoScreen: name: 'photo'
-    StorageScreen: name: 'storage'
+    MainScreen:
+        name: 'main'
+    CharSelectScreen:
+        name: 'char_select'
+    SlotMenuScreen:
+        name: 'slot_menu'
+    InfoScreen:
+        name: 'info'
+    EquipScreen:
+        name: 'equip'
+    InventoryScreen:
+        name: 'inv'
+    PhotoScreen:
+        name: 'photo'
+    StorageScreen:
+        name: 'storage'
 '''
 
-# [4. 앱 엔진: 권한 강제 획득 및 리소스 주입]
+# [4. 앱 엔진: 권한 및 리소스 제어]
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
-        # 실행 즉시 아이콘 경로만 설정
         icon_path = os.path.join(DOWNLOAD_PATH, "icon.png")
         if os.path.exists(icon_path):
             self.icon = icon_path
         return Builder.load_string(KV)
 
     def on_start(self):
-        # 안드로이드 시스템이 준비될 때까지 1초 대기 후 권한 요청
         Clock.schedule_once(self.request_android_permissions, 1.0)
 
     def request_android_permissions(self, dt):
         if platform == 'android':
             try:
                 from android.permissions import request_permissions, Permission
-                # 안드로이드 14 대응 핵심 권한 리스트
                 perms = [
                     Permission.READ_EXTERNAL_STORAGE,
                     Permission.WRITE_EXTERNAL_STORAGE,
-                    Permission.MANAGE_EXTERNAL_STORAGE, # 모든 파일 관리 권한
+                    Permission.MANAGE_EXTERNAL_STORAGE,
                     Permission.READ_MEDIA_IMAGES
                 ]
                 request_permissions(perms, self.on_permission_result)
-            except Exception as e:
-                write_blackbox(f"Permission Request Failed: {e}")
-                self.apply_resources() # 실패하더라도 시도
+            except: self.apply_resources()
         else:
             self.apply_resources()
-            self.load_data()
+        self.load_data()
 
     def on_permission_result(self, permissions, results):
-        write_blackbox(f"Permission Response: {results}")
-        # 권한 결과와 관계없이 리소스 로딩 시도 (수동 허용 대비)
         self.apply_resources()
         self.load_data()
 
     def apply_resources(self):
-        # [폰트 수복]
         f_path = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_path):
-            try:
-                LabelBase.register(name="KFont", fn_regular=f_path)
-                write_blackbox("Font.ttf Engraved.")
+            try: LabelBase.register(name="KFont", fn_regular=f_path)
             except: pass
-
-        # [배경화면 강제 주입]
         bg_path = os.path.join(DOWNLOAD_PATH, "bg.png")
         if os.path.exists(bg_path):
-            try:
-                for sc in self.root.screens:
-                    with sc.canvas.before:
-                        Color(1, 1, 1, 1)
-                        Rectangle(source=bg_path, pos=sc.pos, size=sc.size)
-                write_blackbox("Background image 수복 완료.")
-            except: pass
+            for sc in self.root.screens:
+                with sc.canvas.before:
+                    Color(1, 1, 1, 1)
+                    Rectangle(source=bg_path, pos=sc.pos, size=sc.size)
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v52.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v54.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -237,12 +229,12 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v52.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v54.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
 
-# [5. 기능 로직: 7대 창 및 목록 물리 각인]
+# [5. 스크린 로직]
 class MainScreen(Screen):
     def on_enter(self): self.refresh()
     def refresh(self):
