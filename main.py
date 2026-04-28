@@ -29,10 +29,9 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 원칙: 모든 에러를 포착하여 블랙박스에 기록하고 앱 생존 보장
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 모든 라인에 자가 치유(Try-Except) 적용
+# [3. 스크린 로직]: 자가 치유(Self-Healing) 전 라인 적용
 class MainScreen(Screen):
     def on_enter(self):
         try:
@@ -41,12 +40,11 @@ class MainScreen(Screen):
             write_blackbox(f"Healing on_enter: {str(e)}")
 
     def refresh(self, search_text=""):
-        try: # 자가 치유 격벽
+        try:
             container = self.ids.acc_list
             container.clear_widgets()
             app = App.get_running_app()
             accounts = app.user_data.get("accounts", {})
-            
             for aid in accounts:
                 if search_text.lower() in aid.lower():
                     btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
@@ -54,10 +52,9 @@ class MainScreen(Screen):
                     container.add_widget(btn)
         except Exception as e:
             write_blackbox(f"Healing refresh: {str(e)}")
-            # 치유: 목록 로드 실패 시 빈 화면이라도 유지
 
     def add_acc(self):
-        try: # 자가 치유 격벽
+        try:
             aid = datetime.now().strftime('%H%M%S')
             app = App.get_running_app()
             if "accounts" not in app.user_data:
@@ -65,7 +62,6 @@ class MainScreen(Screen):
             app.user_data["accounts"][aid] = {str(i): {"info": {}, "equip": {}} for i in range(1, 7)}
             app.save_data()
             self.refresh(self.ids.search_input.text)
-            write_blackbox(f"Account {aid} Created.")
         except Exception as e:
             write_blackbox(f"Healing add_acc: {str(e)}")
 
@@ -140,7 +136,7 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 자가 치유 기본 배경색 설정
+# [4. KV 레이아웃]: 세미콜론 제거 및 정석 문법 적용 (Parser 에러 수복)
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -168,7 +164,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v65 (Self-Healing)"
+            text: "PristonTale Manager v66"
             font_size: '22sp'
             size_hint_y: 0.1
         TextInput:
@@ -214,12 +210,23 @@ KV = '''
         orientation: 'vertical'
         padding: '30dp'
         spacing: '12dp'
-        Button: text: "1. 케릭정보창"; on_release: root.manager.current = 'info'
-        Button: text: "2. 케릭장비창"; on_release: root.manager.current = 'equip'
-        Button: text: "3. 인벤토리창"; on_release: root.manager.current = 'inv'
-        Button: text: "4. 사진선택창"; on_release: root.manager.current = 'photo'
-        Button: text: "5. 저장보관소"; on_release: root.manager.current = 'storage'
-        Widget: size_hint_y: 0.1
+        Button:
+            text: "1. 케릭정보창"
+            on_release: root.manager.current = 'info'
+        Button:
+            text: "2. 케릭장비창"
+            on_release: root.manager.current = 'equip'
+        Button:
+            text: "3. 인벤토리창"
+            on_release: root.manager.current = 'inv'
+        Button:
+            text: "4. 사진선택창"
+            on_release: root.manager.current = 'photo'
+        Button:
+            text: "5. 저장보관소"
+            on_release: root.manager.current = 'storage'
+        Widget:
+            size_hint_y: 0.1
         Button:
             text: "<< 캐릭터 선택으로"
             background_color: 0.4, 0.4, 0.4, 0.7
@@ -239,28 +246,44 @@ KV = '''
         BoxLayout:
             size_hint_y: 0.12
             spacing: '10dp'
-            Button: text: "저장하기"; on_release: root.save_confirm()
-            Button: text: "뒤로가기"; on_release: root.manager.current = 'slot_menu'
+            Button:
+                text: "저장하기"
+                on_release: root.save_confirm()
+            Button:
+                text: "뒤로가기"
+                on_release: root.manager.current = 'slot_menu'
 
 <InventoryScreen>, <PhotoScreen>, <StorageScreen>:
     BoxLayout:
         orientation: 'vertical'
-        Label: text: "준비 중입니다."
-        Button: text: "뒤로가기"; size_hint_y: 0.2; on_release: root.manager.current = 'slot_menu'
+        Label:
+            text: "준비 중입니다."
+        Button:
+            text: "뒤로가기"
+            size_hint_y: 0.2
+            on_release: root.manager.current = 'slot_menu'
 
 ScreenManager:
     transition: FadeTransition()
-    MainScreen: name: 'main'
-    CharSelectScreen: name: 'char_select'
-    SlotMenuScreen: name: 'slot_menu'
-    InfoScreen: name: 'info'
-    EquipScreen: name: 'equip'
-    InventoryScreen: name: 'inv'
-    PhotoScreen: name: 'photo'
-    StorageScreen: name: 'storage'
+    MainScreen:
+        name: 'main'
+    CharSelectScreen:
+        name: 'char_select'
+    SlotMenuScreen:
+        name: 'slot_menu'
+    InfoScreen:
+        name: 'info'
+    EquipScreen:
+        name: 'equip'
+    InventoryScreen:
+        name: 'inv'
+    PhotoScreen:
+        name: 'photo'
+    StorageScreen:
+        name: 'storage'
 '''
 
-# [5. 앱 엔진]: 자가 치유 기반 리소스 관리
+# [5. 앱 엔진]: 리소스 자가 치유
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
@@ -273,7 +296,6 @@ class PristonApp(App):
         return Builder.load_string(KV)
 
     def on_start(self):
-        # 자가 치유를 위해 순차적 실행
         self.apply_font()
         Clock.schedule_once(self.request_android_permissions, 1.0)
         self.load_data()
@@ -306,7 +328,6 @@ class PristonApp(App):
             write_blackbox(f"Healing Font: {str(e)}")
 
     def apply_background(self, *args):
-        # [핵심 수복]: 이미지 로딩 실패 시 즉시 자가 치유
         try:
             bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
             if os.path.exists(bg_p):
@@ -317,21 +338,19 @@ class PristonApp(App):
                 write_blackbox("Background Applied.")
         except Exception as e:
             write_blackbox(f"Healing Background: {str(e)}")
-            # 치유: 튕기지 않고 검정 배경 유지
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v65.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v66.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
         except Exception as e:
             write_blackbox(f"Healing load_data: {str(e)}")
-            self.user_data = {"accounts": {}}
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v65.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v66.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except Exception as e:
