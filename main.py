@@ -29,10 +29,10 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 원칙: 어떤 치명적 에러도 블랙박스에 가두고 앱은 강제 생존시킨다.
+# 원칙: 어떤 렌더링 오류도 블랙박스에 가두고 앱의 물리적 생존을 강제한다.
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 전 라인 자가 치유 격벽 설치
+# [3. 스크린 로직]: 모든 라인 자가 치유(Try-Except) 격벽 이식
 class MainScreen(Screen):
     def on_enter(self):
         try:
@@ -137,7 +137,7 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 복잡한 조건문 삭제 및 중앙 변수 참조형 수복
+# [4. KV 레이아웃]: 폰트 참조 오류 시 무조건 시스템 폰트로 회귀하는 물리 봉쇄
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -150,13 +150,13 @@ KV = '''
             size: self.size
 
 <Label>:
-    # 수복: 엔진(app)이 정해준 폰트 이름만 그대로 따름 (판단 중지)
-    font_name: app.custom_font
+    # 수복: 엔진에서 정한 변수가 없거나 실패해도 Roboto로 강제 생존
+    font_name: getattr(app, 'custom_font', 'Roboto')
     outline_width: 1
     outline_color: 0, 0, 0, 1
 
 <Button>:
-    font_name: app.custom_font
+    font_name: getattr(app, 'custom_font', 'Roboto')
     background_normal: ''
     background_color: 0.18, 0.49, 0.2, 0.6
 
@@ -166,7 +166,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v70 (Stable)"
+            text: "PristonTale Manager v71 (Survivor)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -284,24 +284,24 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 중앙 통제형 자가 치유 시스템
+# [5. 앱 엔진]: 폰트 렌더링 단계의 모든 마찰을 0으로 소거
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
-    # 수복: 설계도에 전달할 확정된 폰트 이름 변수
-    custom_font = "Roboto"
+    custom_font = "Roboto" # 기본값 강제 할당
 
     def build(self):
         try:
-            # 폰트 검사를 여기서 먼저 끝내고 custom_font에 저장
+            # 1. 폰트 등록 시도 (실패 시 즉시 Roboto 회군)
             self.apply_font()
             
             icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
             if os.path.exists(icon_p): self.icon = icon_p
             
+            # 2. 설계도 로딩 (튕김 방지 격벽)
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"Concentrated Parser Healing: {str(e)}")
+            write_blackbox(f"Ultimate Parser Healing: {str(e)}")
             return ScreenManager()
 
     def on_start(self):
@@ -327,19 +327,24 @@ class PristonApp(App):
         self.apply_background()
 
     def apply_font(self):
-        # 수복: 폰트 등록 가능 여부를 엔진이 판단하여 custom_font를 결정함
+        # 수복: 폰트 등록 과정에서 발생하는 어떤 치명적 사고도 격리함
         try:
             f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
             if os.path.exists(f_p):
+                # 파일 읽기 테스트 (권한 체크)
+                with open(f_p, 'rb') as f:
+                    f.read(10)
+                # 렌더링 엔진 등록
                 LabelBase.register(name="font", fn_regular=f_p)
                 self.custom_font = "font"
-                write_blackbox("Font Engraved by Engine.")
+                write_blackbox("Font Engraved & Tested.")
             else:
                 self.custom_font = "Roboto"
-                write_blackbox("Font File missing, fallback to Roboto.")
+                write_blackbox("No Font file, Safety Mode Active.")
         except Exception as e:
+            # 조금이라도 의심스러우면 즉시 Roboto로 고정하여 튕김 차단
             self.custom_font = "Roboto"
-            write_blackbox(f"Engine Font Healing: {str(e)}")
+            write_blackbox(f"Critical Font Block Applied: {str(e)}")
 
     def apply_background(self, *args):
         try:
@@ -355,7 +360,7 @@ class PristonApp(App):
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final_v70.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final_v71.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -364,7 +369,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final_v70.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final_v71.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except Exception as e:
@@ -374,4 +379,4 @@ if __name__ == "__main__":
     try:
         PristonApp().run()
     except Exception as e:
-        write_blackbox(f"FINAL SYSTEM CRASH: {str(e)}")
+        write_blackbox(f"FINAL SYSTEM BLOCK: {str(e)}")
