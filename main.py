@@ -16,7 +16,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 & 자가 치유 엔진]
+# [2. 블랙박스 & 초강력 자가 치유 엔진]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
 
@@ -29,10 +29,10 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 원칙: 모든 치명적 에러를 포착하여 블랙박스에 기록하고 강제 생존
+# 전역 에러 트래핑: 어떤 치명적 오류도 블랙박스에 가두고 앱은 살려둠
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 자가 치유(Self-Healing) 전 라인 적용
+# [3. 스크린 로직]: 모든 라인 자가 치유 격벽 설치
 class MainScreen(Screen):
     def on_enter(self):
         try:
@@ -101,17 +101,17 @@ class InfoScreen(Screen):
             for f in self.fields:
                 row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
                 row.add_widget(Label(text=f, size_hint_x=0.35))
-                row.add_widget(TextInput(hint_text="수치 입력", multiline=False))
+                row.add_widget(TextInput(hint_text="입력", multiline=False))
                 self.ids.box.add_widget(row)
         except Exception as e:
-            write_blackbox(f"Healing InfoScreen: {str(e)}")
+            write_blackbox(f"Healing Info: {str(e)}")
 
     def save_confirm(self):
         try:
             App.get_running_app().save_data()
             self.manager.current = 'slot_menu'
         except Exception as e:
-            write_blackbox(f"Healing save_confirm: {str(e)}")
+            write_blackbox(f"Healing save: {str(e)}")
 
 class EquipScreen(Screen):
     items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
@@ -121,23 +121,23 @@ class EquipScreen(Screen):
             for i in self.items:
                 row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
                 row.add_widget(Label(text=i, size_hint_x=0.35))
-                row.add_widget(TextInput(hint_text="장비 정보", multiline=False))
+                row.add_widget(TextInput(hint_text="정보", multiline=False))
                 self.ids.box.add_widget(row)
         except Exception as e:
-            write_blackbox(f"Healing EquipScreen: {str(e)}")
+            write_blackbox(f"Healing Equip: {str(e)}")
 
     def save_confirm(self):
         try:
             App.get_running_app().save_data()
             self.manager.current = 'slot_menu'
         except Exception as e:
-            write_blackbox(f"Healing save_confirm: {str(e)}")
+            write_blackbox(f"Healing save: {str(e)}")
 
 class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 한 줄 표기법 전면 철폐 및 정석 분리 (Parser 오류 수복)
+# [4. KV 레이아웃]: 한 줄 표기법 완전 제거 및 정석 분리
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -150,12 +150,12 @@ KV = '''
             size: self.size
 
 <Label>:
-    font_name: 'font'
+    font_name: 'font' if 'font' in LabelBase.get_registered_designators() else 'Roboto'
     outline_width: 1
     outline_color: 0, 0, 0, 1
 
 <Button>:
-    font_name: 'font'
+    font_name: 'font' if 'font' in LabelBase.get_registered_designators() else 'Roboto'
     background_normal: ''
     background_color: 0.18, 0.49, 0.2, 0.6
 
@@ -165,7 +165,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v67"
+            text: "PristonTale Manager v68 (Final)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -174,7 +174,6 @@ KV = '''
             size_hint_y: None
             height: '50dp'
             multiline: False
-            font_name: 'font'
             on_text: root.refresh(self.text)
         ScrollView:
             BoxLayout:
@@ -284,26 +283,27 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 설계도 로딩 단계부터 자가 치유 격벽 설치
+# [5. 앱 엔진]: 폰트/이미지 에러 시 자가 수복 로직 탑재
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
-        # 설계도 판독 단계의 자가 치유
         try:
             icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
             if os.path.exists(icon_p): self.icon = icon_p
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"CRITICAL PARSER HEALING: {str(e)}")
-            # 최악의 경우에도 튕기지 않게 빈 레이아웃이라도 반환
+            write_blackbox(f"Critical Parser Healing: {str(e)}")
             return ScreenManager()
 
     def on_start(self):
-        self.apply_font()
-        Clock.schedule_once(self.request_android_permissions, 1.0)
-        self.load_data()
+        try:
+            self.apply_font()
+            Clock.schedule_once(self.request_android_permissions, 1.0)
+            self.load_data()
+        except Exception as e:
+            write_blackbox(f"OnStart Healing: {str(e)}")
 
     def request_android_permissions(self, dt):
         if platform == 'android':
@@ -315,7 +315,7 @@ class PristonApp(App):
                         perms.append(getattr(Permission, p_name))
                 request_permissions(perms, self.on_permission_result)
             except Exception as e:
-                write_blackbox(f"Healing Perm: {str(e)}")
+                write_blackbox(f"Perm Healing: {str(e)}")
                 self.apply_background()
         else:
             self.apply_background()
@@ -324,13 +324,16 @@ class PristonApp(App):
         self.apply_background()
 
     def apply_font(self):
+        # 폰트 등록 실패 시 튕기지 않도록 자가 치유 격벽 설치
         try:
             f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
             if os.path.exists(f_p):
                 LabelBase.register(name="font", fn_regular=f_p)
-                write_blackbox("Font Engraved.")
+                write_blackbox("Font Engraved Successfully.")
+            else:
+                write_blackbox("Font file not found, using default.")
         except Exception as e:
-            write_blackbox(f"Healing Font: {str(e)}")
+            write_blackbox(f"Font Healing Applied: {str(e)}")
 
     def apply_background(self, *args):
         try:
@@ -342,27 +345,27 @@ class PristonApp(App):
                         Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
                 write_blackbox("Background Applied.")
         except Exception as e:
-            write_blackbox(f"Healing Background: {str(e)}")
+            write_blackbox(f"Background Healing: {str(e)}")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v67.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
         except Exception as e:
-            write_blackbox(f"Healing load_data: {str(e)}")
+            write_blackbox(f"Data Load Healing: {str(e)}")
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v67.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_Final.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except Exception as e:
-            write_blackbox(f"Healing save_data: {str(e)}")
+            write_blackbox(f"Data Save Healing: {str(e)}")
 
 if __name__ == "__main__":
     try:
         PristonApp().run()
     except Exception as e:
-        write_blackbox(f"CRITICAL APP FAILURE: {str(e)}")
+        write_blackbox(f"FINAL CRITICAL FAILURE: {str(e)}")
