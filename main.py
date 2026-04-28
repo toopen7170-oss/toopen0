@@ -29,16 +29,12 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 원칙: 어떤 렌더링 오류도 블랙박스에 가두고 앱의 물리적 생존을 강제한다.
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 모든 라인 자가 치유(Try-Except) 격벽 이식
+# [3. 스크린 로직]: 문법 오류(super object) 및 스레드 충돌 수복
 class MainScreen(Screen):
     def on_enter(self):
-        try:
-            Clock.schedule_once(lambda dt: self.refresh(), 0.1)
-        except Exception as e:
-            write_blackbox(f"Healing Main: {str(e)}")
+        Clock.schedule_once(lambda dt: self.refresh(), 0.1)
 
     def refresh(self, search_text=""):
         try:
@@ -51,27 +47,21 @@ class MainScreen(Screen):
                     btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
                     btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
                     container.add_widget(btn)
-        except Exception as e:
-            write_blackbox(f"Healing refresh: {str(e)}")
+        except Exception as e: write_blackbox(f"Refresh Error: {e}")
 
     def add_acc(self):
         try:
             aid = datetime.now().strftime('%H%M%S')
             app = App.get_running_app()
-            if "accounts" not in app.user_data:
-                app.user_data["accounts"] = {}
+            if "accounts" not in app.user_data: app.user_data["accounts"] = {}
             app.user_data["accounts"][aid] = {str(i): {"info": {}, "equip": {}} for i in range(1, 7)}
             app.save_data()
             self.refresh(self.ids.search_input.text)
-        except Exception as e:
-            write_blackbox(f"Healing add_acc: {str(e)}")
+        except Exception as e: write_blackbox(f"Add Acc Error: {e}")
 
     def go_acc(self, aid):
-        try:
-            App.get_running_app().cur_acc = aid
-            self.manager.current = 'char_select'
-        except Exception as e:
-            write_blackbox(f"Healing go_acc: {str(e)}")
+        App.get_running_app().cur_acc = aid
+        self.manager.current = 'char_select'
 
 class CharSelectScreen(Screen):
     def on_enter(self):
@@ -81,82 +71,51 @@ class CharSelectScreen(Screen):
                 btn = Button(text=f"캐릭터 슬롯 {i}")
                 btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
                 self.ids.grid.add_widget(btn)
-        except Exception as e:
-            write_blackbox(f"Healing CharSelect: {str(e)}")
+        except Exception as e: write_blackbox(f"CharSelect Error: {e}")
 
     def go_slot(self, idx):
-        try:
-            App.get_running_app().cur_slot = str(idx)
-            self.manager.current = 'slot_menu'
-        except Exception as e:
-            write_blackbox(f"Healing go_slot: {str(e)}")
+        App.get_running_app().cur_slot = str(idx)
+        self.manager.current = 'slot_menu'
 
 class SlotMenuScreen(Screen): pass
 
 class InfoScreen(Screen):
-    fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
     def on_enter(self):
         try:
             self.ids.box.clear_widgets()
-            for f in self.fields:
+            fields = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
+            for f in fields:
                 row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
                 row.add_widget(Label(text=f, size_hint_x=0.35))
                 row.add_widget(TextInput(hint_text="입력", multiline=False))
                 self.ids.box.add_widget(row)
-        except Exception as e:
-            write_blackbox(f"Healing Info: {str(e)}")
-
-    def save_confirm(self):
-        try:
-            App.get_running_app().save_data()
-            self.manager.current = 'slot_menu'
-        except Exception as e:
-            write_blackbox(f"Healing save: {str(e)}")
+        except Exception as e: write_blackbox(f"Info Error: {e}")
 
 class EquipScreen(Screen):
-    items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
     def on_enter(self):
         try:
             self.ids.box.clear_widgets()
-            for i in self.items:
+            items = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
+            for i in items:
                 row = BoxLayout(size_hint_y=None, height="50dp", spacing="10dp")
                 row.add_widget(Label(text=i, size_hint_x=0.35))
                 row.add_widget(TextInput(hint_text="정보", multiline=False))
                 self.ids.box.add_widget(row)
-        except Exception as e:
-            write_blackbox(f"Healing Equip: {str(e)}")
-
-    def save_confirm(self):
-        try:
-            App.get_running_app().save_data()
-            self.manager.current = 'slot_menu'
-        except Exception as e:
-            write_blackbox(f"Healing save: {str(e)}")
+        except Exception as e: write_blackbox(f"Equip Error: {e}")
 
 class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 폰트 참조 오류 시 무조건 시스템 폰트로 회귀하는 물리 봉쇄
+# [4. KV 레이아웃]: 한 줄 표기법 표준화 및 폰트 강제 적용
 KV = '''
-#:import FadeTransition kivy.uix.screenmanager.FadeTransition
-
-<Screen>:
-    canvas.before:
-        Color:
-            rgba: 0.1, 0.1, 0.1, 1
-        Rectangle:
-            pos: self.pos
-            size: self.size
-
 <Label>:
-    # 수복: 엔진에서 정한 변수가 없거나 실패해도 Roboto로 강제 생존
-    font_name: getattr(app, 'custom_font', 'Roboto')
+    font_name: app.custom_font
     outline_width: 1
     outline_color: 0, 0, 0, 1
 
 <Button>:
-    font_name: getattr(app, 'custom_font', 'Roboto')
+    font_name: app.custom_font
     background_normal: ''
     background_color: 0.18, 0.49, 0.2, 0.6
 
@@ -166,7 +125,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v71 (Survivor)"
+            text: "PristonTale Manager v72 (Native)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -249,7 +208,7 @@ KV = '''
             spacing: '10dp'
             Button:
                 text: "저장하기"
-                on_release: root.save_confirm()
+                on_release: App.get_running_app().save_data(); root.manager.current = 'slot_menu'
             Button:
                 text: "뒤로가기"
                 on_release: root.manager.current = 'slot_menu'
@@ -284,69 +243,41 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 폰트 렌더링 단계의 모든 마찰을 0으로 소거
+# [5. 앱 엔진]: 시스템 폰트 강제 징발 및 그래픽 동기화
 class PristonApp(App):
     user_data = {"accounts": {}}
-    cur_acc = ""; cur_slot = ""
-    custom_font = "Roboto" # 기본값 강제 할당
+    custom_font = "Roboto"
 
     def build(self):
-        try:
-            # 1. 폰트 등록 시도 (실패 시 즉시 Roboto 회군)
-            self.apply_font()
-            
-            icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
-            if os.path.exists(icon_p): self.icon = icon_p
-            
-            # 2. 설계도 로딩 (튕김 방지 격벽)
-            return Builder.load_string(KV)
-        except Exception as e:
-            write_blackbox(f"Ultimate Parser Healing: {str(e)}")
-            return ScreenManager()
+        self.apply_native_font()
+        return Builder.load_string(KV)
 
     def on_start(self):
-        Clock.schedule_once(self.request_android_permissions, 1.0)
         self.load_data()
+        # 중요: 그래픽 작업은 반드시 메인 스레드가 안정된 후 실행
+        Clock.schedule_once(self.apply_background, 0.5)
 
-    def request_android_permissions(self, dt):
-        if platform == 'android':
+    def apply_native_font(self):
+        # 수복: 안드로이드 시스템 내부의 한글 폰트를 전수 조사하여 강제 연결
+        font_paths = [
+            os.path.join(DOWNLOAD_PATH, "font.ttf"),
+            "/system/fonts/NanumGothic.ttf",
+            "/system/fonts/NotoSansKR-Regular.otf",
+            "/system/fonts/DroidSansFallback.ttf",
+            "/system/fonts/DroidSansKorean.ttf"
+        ]
+        for path in font_paths:
             try:
-                from android.permissions import request_permissions, Permission
-                perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
-                for p_name in ['READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO']:
-                    if hasattr(Permission, p_name):
-                        perms.append(getattr(Permission, p_name))
-                request_permissions(perms, self.on_permission_result)
-            except Exception as e:
-                write_blackbox(f"Perm Healing: {str(e)}")
-                self.apply_background()
-        else:
-            self.apply_background()
-
-    def on_permission_result(self, permissions, results):
-        self.apply_background()
-
-    def apply_font(self):
-        # 수복: 폰트 등록 과정에서 발생하는 어떤 치명적 사고도 격리함
-        try:
-            f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
-            if os.path.exists(f_p):
-                # 파일 읽기 테스트 (권한 체크)
-                with open(f_p, 'rb') as f:
-                    f.read(10)
-                # 렌더링 엔진 등록
-                LabelBase.register(name="font", fn_regular=f_p)
-                self.custom_font = "font"
-                write_blackbox("Font Engraved & Tested.")
-            else:
-                self.custom_font = "Roboto"
-                write_blackbox("No Font file, Safety Mode Active.")
-        except Exception as e:
-            # 조금이라도 의심스러우면 즉시 Roboto로 고정하여 튕김 차단
-            self.custom_font = "Roboto"
-            write_blackbox(f"Critical Font Block Applied: {str(e)}")
+                if os.path.exists(path):
+                    LabelBase.register(name="korean", fn_regular=path)
+                    self.custom_font = "korean"
+                    write_blackbox(f"Native Font Injected: {path}")
+                    return
+            except: continue
+        write_blackbox("Warning: All Font paths failed. Fallback to Roboto.")
 
     def apply_background(self, *args):
+        # 수복: 메인 스레드 동기화를 통해 그래픽 명령어 충돌 방지
         try:
             bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
             if os.path.exists(bg_p):
@@ -354,29 +285,23 @@ class PristonApp(App):
                     with sc.canvas.before:
                         Color(1, 1, 1, 1)
                         Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
-                write_blackbox("Background Applied.")
-        except Exception as e:
-            write_blackbox(f"Background Healing: {str(e)}")
+                write_blackbox("Background Synced.")
+        except Exception as e: write_blackbox(f"BG Sync Error: {e}")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final_v71.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v72.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
-        except Exception as e:
-            write_blackbox(f"Data Load Healing: {str(e)}")
+        except: pass
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_Final_v71.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v72.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            write_blackbox(f"Data Save Healing: {str(e)}")
+        except: pass
 
 if __name__ == "__main__":
-    try:
-        PristonApp().run()
-    except Exception as e:
-        write_blackbox(f"FINAL SYSTEM BLOCK: {str(e)}")
+    PristonApp().run()
