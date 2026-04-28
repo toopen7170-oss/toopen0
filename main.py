@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 환경 설정 및 모듈 로드]
+# [1. 환경 설정 및 모듈 로드] - 엔진 레벨에서 부품 선언
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -16,7 +16,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 & 자가 치유 엔진]
+# [2. 블랙박스 엔진]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
 
@@ -31,7 +31,7 @@ def write_blackbox(msg):
 
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 문법 오류(super object) 및 스레드 충돌 수복
+# [3. 스크린 로직]: 격벽 보호막 설치
 class MainScreen(Screen):
     def on_enter(self):
         Clock.schedule_once(lambda dt: self.refresh(), 0.1)
@@ -78,7 +78,6 @@ class CharSelectScreen(Screen):
         self.manager.current = 'slot_menu'
 
 class SlotMenuScreen(Screen): pass
-
 class InfoScreen(Screen):
     def on_enter(self):
         try:
@@ -107,8 +106,10 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 한 줄 표기법 표준화 및 폰트 강제 적용
+# [4. KV 레이아웃]: 통행증(Import) 누락 물리적 봉쇄
 KV = '''
+#:import FadeTransition kivy.uix.screenmanager.FadeTransition
+
 <Label>:
     font_name: app.custom_font
     outline_width: 1
@@ -125,7 +126,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v72 (Native)"
+            text: "PristonTale Manager v73 (Assembled)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -208,7 +209,7 @@ KV = '''
             spacing: '10dp'
             Button:
                 text: "저장하기"
-                on_release: App.get_running_app().save_data(); root.manager.current = 'slot_menu'
+                on_release: app.save_data(); root.manager.current = 'slot_menu'
             Button:
                 text: "뒤로가기"
                 on_release: root.manager.current = 'slot_menu'
@@ -224,6 +225,7 @@ KV = '''
             on_release: root.manager.current = 'slot_menu'
 
 ScreenManager:
+    # 수복: 부품을 명시적으로 참조
     transition: FadeTransition()
     MainScreen:
         name: 'main'
@@ -243,41 +245,40 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 시스템 폰트 강제 징발 및 그래픽 동기화
+# [5. 앱 엔진]
 class PristonApp(App):
     user_data = {"accounts": {}}
     custom_font = "Roboto"
 
     def build(self):
-        self.apply_native_font()
-        return Builder.load_string(KV)
+        try:
+            self.apply_native_font()
+            return Builder.load_string(KV)
+        except Exception as e:
+            write_blackbox(f"Builder Emergency: {e}")
+            return ScreenManager()
 
     def on_start(self):
         self.load_data()
-        # 중요: 그래픽 작업은 반드시 메인 스레드가 안정된 후 실행
         Clock.schedule_once(self.apply_background, 0.5)
 
     def apply_native_font(self):
-        # 수복: 안드로이드 시스템 내부의 한글 폰트를 전수 조사하여 강제 연결
         font_paths = [
             os.path.join(DOWNLOAD_PATH, "font.ttf"),
             "/system/fonts/NanumGothic.ttf",
             "/system/fonts/NotoSansKR-Regular.otf",
-            "/system/fonts/DroidSansFallback.ttf",
-            "/system/fonts/DroidSansKorean.ttf"
+            "/system/fonts/DroidSansFallback.ttf"
         ]
         for path in font_paths:
             try:
                 if os.path.exists(path):
                     LabelBase.register(name="korean", fn_regular=path)
                     self.custom_font = "korean"
-                    write_blackbox(f"Native Font Injected: {path}")
+                    write_blackbox(f"Font Success: {path}")
                     return
             except: continue
-        write_blackbox("Warning: All Font paths failed. Fallback to Roboto.")
 
     def apply_background(self, *args):
-        # 수복: 메인 스레드 동기화를 통해 그래픽 명령어 충돌 방지
         try:
             bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
             if os.path.exists(bg_p):
@@ -285,12 +286,11 @@ class PristonApp(App):
                     with sc.canvas.before:
                         Color(1, 1, 1, 1)
                         Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
-                write_blackbox("Background Synced.")
-        except Exception as e: write_blackbox(f"BG Sync Error: {e}")
+        except Exception as e: write_blackbox(f"BG Error: {e}")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v72.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v73.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -298,7 +298,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v72.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v73.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
