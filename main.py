@@ -29,13 +29,12 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 전역 에러 트래핑 (앱 생존 보장)
+# 전역 에러 트래핑 (어떠한 에러가 발생해도 유언을 남기고 종료 방지)
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
 # [3. 스크린 로직]
 class MainScreen(Screen):
     def on_enter(self):
-        # UI 안착 후 목록 로드 (프리징 방지)
         Clock.schedule_once(lambda dt: self.refresh(), 0.1)
 
     def refresh(self, search_text=""):
@@ -118,7 +117,7 @@ KV = '''
 <Screen>:
     canvas.before:
         Color:
-            rgba: 1, 1, 1, 1
+            rgba: 0.1, 0.1, 0.1, 1 # 기본 배경색 (이미지 로드 실패 시 보험)
         Rectangle:
             pos: self.pos
             size: self.size
@@ -139,7 +138,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v63"
+            text: "PristonTale Manager v64"
             font_size: '24sp'
             size_hint_y: 0.1
         TextInput:
@@ -269,8 +268,9 @@ class PristonApp(App):
         return Builder.load_string(KV)
 
     def on_start(self):
-        # 권한 요청과 리소스 적용을 완전히 분리하여 프리징 차단
-        Clock.schedule_once(self.apply_resources, 0.5)
+        # 폰트는 즉시 등록 시도
+        self.apply_font()
+        # 권한 및 배경은 순차적/안전하게 진행
         Clock.schedule_once(self.request_android_permissions, 1.0)
         self.load_data()
 
@@ -278,36 +278,46 @@ class PristonApp(App):
         if platform == 'android':
             try:
                 from android.permissions import request_permissions, Permission
-                # 에러 유발 권한(MANAGE_EXTERNAL_STORAGE) 제외하고 안전한 권한만 요청
                 perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
-                # 최신 미디어 권한이 있는지 안전하게 확인 후 추가
                 for p_name in ['READ_MEDIA_IMAGES', 'READ_MEDIA_VIDEO']:
                     if hasattr(Permission, p_name):
                         perms.append(getattr(Permission, p_name))
-                request_permissions(perms)
+                request_permissions(perms, self.on_permission_result)
             except Exception as e:
-                write_blackbox(f"Permission Request Skipped: {str(e)}")
+                write_blackbox(f"Perm Error: {str(e)}")
+                self.apply_background() # 에러 나도 배경은 시도
+        else:
+            self.apply_background()
 
-    def apply_resources(self, dt):
-        # 폰트 적용
+    def on_permission_result(self, permissions, results):
+        # 권한 결과 확인 후 배경 적용
+        self.apply_background()
+
+    def apply_font(self):
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="font", fn_regular=f_p)
                 write_blackbox("Font Engraved.")
             except: pass
-        # 배경 적용
+
+    def apply_background(self, *args):
+        # [핵심 수복]: 이미지 로딩 시 튕김 방지 (try-except 격벽)
         bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
         if os.path.exists(bg_p):
-            for sc in self.root.screens:
-                with sc.canvas.before:
-                    Color(1, 1, 1, 1)
-                    Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
-            write_blackbox("Background Applied.")
+            try:
+                for sc in self.root.screens:
+                    with sc.canvas.before:
+                        Color(1, 1, 1, 1)
+                        Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
+                write_blackbox("Background Applied Successfully.")
+            except Exception as e:
+                # 권한 거부 등으로 로딩 실패 시 튕기지 않고 로그만 기록
+                write_blackbox(f"Background Loading Blocked: {str(e)}")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v63.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v64.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -315,7 +325,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v63.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v64.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
