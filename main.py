@@ -29,6 +29,7 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
+# 원칙: 모든 치명적 에러를 포착하여 블랙박스에 기록하고 강제 생존
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
 # [3. 스크린 로직]: 자가 치유(Self-Healing) 전 라인 적용
@@ -37,7 +38,7 @@ class MainScreen(Screen):
         try:
             Clock.schedule_once(lambda dt: self.refresh(), 0.1)
         except Exception as e:
-            write_blackbox(f"Healing on_enter: {str(e)}")
+            write_blackbox(f"Healing Main on_enter: {str(e)}")
 
     def refresh(self, search_text=""):
         try:
@@ -136,7 +137,7 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 세미콜론 제거 및 정석 문법 적용 (Parser 에러 수복)
+# [4. KV 레이아웃]: 한 줄 표기법 전면 철폐 및 정석 분리 (Parser 오류 수복)
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -164,12 +165,12 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v66"
-            font_size: '22sp'
+            text: "PristonTale Manager v67"
+            font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
             id: search_input
-            hint_text: "전체 검색 (계정 ID 입력)"
+            hint_text: "계정 ID 검색"
             size_hint_y: None
             height: '50dp'
             multiline: False
@@ -283,17 +284,21 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 리소스 자가 치유
+# [5. 앱 엔진]: 설계도 로딩 단계부터 자가 치유 격벽 설치
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
 
     def build(self):
+        # 설계도 판독 단계의 자가 치유
         try:
             icon_p = os.path.join(DOWNLOAD_PATH, "icon.png")
             if os.path.exists(icon_p): self.icon = icon_p
-        except: pass
-        return Builder.load_string(KV)
+            return Builder.load_string(KV)
+        except Exception as e:
+            write_blackbox(f"CRITICAL PARSER HEALING: {str(e)}")
+            # 최악의 경우에도 튕기지 않게 빈 레이아웃이라도 반환
+            return ScreenManager()
 
     def on_start(self):
         self.apply_font()
@@ -341,7 +346,7 @@ class PristonApp(App):
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v66.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v67.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -350,7 +355,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v66.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v67.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except Exception as e:
