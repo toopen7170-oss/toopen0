@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 모듈 로드 및 환경 설정]
+# [1. 환경 설정 및 모듈 로드]
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -16,7 +16,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 시스템]: 사진 속 그 파일과 연동
+# [2. 블랙박스 시스템]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
 
@@ -29,24 +29,27 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 치명적 오류 발생 시 즉시 블랙박스 기록 (AttributeError 방어)
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 클래스 정의]: 함수 누락 방지를 위한 정밀 각인
+# [3. 스크린 로직]: 검색 기능 및 안정성 강화
 class MainScreen(Screen):
     def on_enter(self):
-        self.refresh()
+        # super 에러 방지를 위해 UI 로드 후 실행
+        Clock.schedule_once(lambda dt: self.refresh(), 0.1)
 
-    def refresh(self):
+    def refresh(self, search_text=""):
         try:
-            self.ids.acc_list.clear_widgets()
+            container = self.ids.acc_list
+            container.clear_widgets()
             app = App.get_running_app()
             accounts = app.user_data.get("accounts", {})
+            
             for aid in accounts:
-                btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
-                # lambda 함수 연결 무결성 확보
-                btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
-                self.ids.acc_list.add_widget(btn)
+                # 검색어가 포함된 경우만 출력 (대소문자 무시)
+                if search_text.lower() in aid.lower():
+                    btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
+                    btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
+                    container.add_widget(btn)
         except Exception as e:
             write_blackbox(f"Refresh Error: {str(e)}")
 
@@ -56,10 +59,9 @@ class MainScreen(Screen):
             app = App.get_running_app()
             if "accounts" not in app.user_data:
                 app.user_data["accounts"] = {}
-            # 6개 슬롯 기본 생성
             app.user_data["accounts"][aid] = {str(i): {"info": {}, "equip": {}} for i in range(1, 7)}
             app.save_data()
-            self.refresh()
+            self.refresh(self.ids.search_input.text) # 현재 검색 상태 유지하며 갱신
             write_blackbox(f"Account {aid} Created.")
         except Exception as e:
             write_blackbox(f"Add Acc Error: {str(e)}")
@@ -112,7 +114,7 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: root 참조 무결성 확보
+# [4. KV 레이아웃]: 검색창 UI 추가 및 구조 정밀화
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -137,19 +139,32 @@ KV = '''
 <MainScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: '20dp'
-        spacing: '15dp'
+        padding: '15dp'
+        spacing: '10dp'
+        
         Label:
-            text: "PristonTale Manager v61"
-            font_size: '28sp'
-            size_hint_y: 0.15
+            text: "PristonTale Manager v62"
+            font_size: '24sp'
+            size_hint_y: 0.1
+        
+        # 검색창 영역
+        TextInput:
+            id: search_input
+            hint_text: "전체 검색 (계정 ID 입력)"
+            size_hint_y: None
+            height: '50dp'
+            multiline: False
+            font_name: 'font'
+            on_text: root.refresh(self.text)
+            
         ScrollView:
             BoxLayout:
                 id: acc_list
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
-                spacing: '10dp'
+                spacing: '8dp'
+        
         Button:
             text: "+ 새 계정 생성"
             size_hint_y: None
@@ -162,7 +177,7 @@ KV = '''
         padding: '20dp'
         spacing: '15dp'
         Label:
-            text: "캐릭터를 선택하세요"
+            text: "캐릭터 슬롯 선택"
             size_hint_y: 0.1
         GridLayout:
             id: grid
@@ -200,28 +215,7 @@ KV = '''
             background_color: 0.4, 0.4, 0.4, 0.7
             on_release: root.manager.current = 'char_select'
 
-<InfoScreen>:
-    BoxLayout:
-        orientation: 'vertical'
-        padding: '10dp'
-        ScrollView:
-            BoxLayout:
-                id: box
-                orientation: 'vertical'
-                size_hint_y: None
-                height: self.minimum_height
-                spacing: '8dp'
-        BoxLayout:
-            size_hint_y: 0.12
-            spacing: '10dp'
-            Button:
-                text: "저장하기"
-                on_release: root.save_confirm()
-            Button:
-                text: "뒤로가기"
-                on_release: root.manager.current = 'slot_menu'
-
-<EquipScreen>:
+<InfoScreen>, <EquipScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: '10dp'
@@ -272,7 +266,7 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 메인 엔진]
+# [5. 앱 엔진]
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
@@ -303,12 +297,14 @@ class PristonApp(App):
         self.load_data()
 
     def apply_resources(self):
+        # 폰트 절대 경로 매핑 (SDL2 에러 방어)
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="font", fn_regular=f_p)
                 write_blackbox("Font Engraved.")
-            except: pass
+            except Exception as e:
+                write_blackbox(f"Font Error: {str(e)}")
 
         bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
         if os.path.exists(bg_p):
@@ -320,7 +316,7 @@ class PristonApp(App):
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v61.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v62.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -328,7 +324,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v61.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v62.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
