@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1-파이썬]: 핵심 모듈 선제 고정
+# [예방 1-파이썬]: 핵심 모듈 선제 고정 (NameError 차단)
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -17,9 +17,9 @@ from kivy.uix.popup import Popup
 from kivy.graphics import Rectangle, Color
 from kivy.utils import platform
 
-# [환경 설정]
+# [환경 설정]: 블랙박스 및 데이터 경로
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v101.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v102.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -29,10 +29,10 @@ def write_blackbox(msg):
             f.write(f"[{ts}] {msg}\n")
     except: pass
 
-# [강제 생존]: 시스템 예외 훅
+# [강제 생존]: 시스템 예외 훅 각인
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [예방 2]: 자가 치유 베이스 스크린
+# [예방 2]: 자가 치유 베이스 스크린 (배경 로직)
 class BaseScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -47,11 +47,11 @@ class BaseScreen(Screen):
                 if os.path.exists(bg_path):
                     Rectangle(source=bg_path, pos=self.pos, size=self.size)
                 else:
-                    Color(0.05, 0.1, 0.2, 1)
+                    Color(0.05, 0.1, 0.2, 1) # 남색 배경 자동 치유
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
-# [세부 목록 데이터 필드]
+# [세부 목록]: 데이터 필드 전수 정의
 INFO_KEYS = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
 EQUIP_KEYS = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
 
@@ -92,7 +92,7 @@ class MainScreen(BaseScreen):
     def create_acc(self):
         new_id = datetime.now().strftime('%m%d_%H%M%S')
         app = App.get_running_app()
-        app.user_data["accounts"][new_id] = {str(i): {"info":{}, "equip":{}} for i in range(1,7)}
+        app.user_data["accounts"][new_id] = {str(i): {"info":{}, "equip":{}, "inv":{}, "photo":{}, "storage":{}} for i in range(1,7)}
         app.save_data(); self.refresh()
 
 class CharSelectScreen(BaseScreen):
@@ -114,37 +114,32 @@ class DataEntryScreen(BaseScreen):
     def on_enter(self):
         self.ids.container.clear_widgets()
         app = App.get_running_app()
-        acc = app.user_data["accounts"].get(app.cur_acc, {})
-        slot_data = acc.get(app.cur_slot, {})
-        current_data = slot_data.get(self.data_type, {})
+        acc_data = app.user_data["accounts"].get(app.cur_acc, {})
+        slot_data = acc_data.get(app.cur_slot, {})
+        current_values = slot_data.get(self.data_type, {})
         self.inputs = {}
         for k in self.keys:
             row = BoxLayout(size_hint_y=None, height="50dp", spacing=10)
             row.add_widget(Label(text=k, size_hint_x=0.3))
-            ti = TextInput(text=str(current_data.get(k, "")), multiline=False)
+            ti = TextInput(text=str(current_values.get(k, "")), multiline=False)
             self.inputs[k] = ti
             row.add_widget(ti)
             self.ids.container.add_widget(row)
     def save(self):
         app = App.get_running_app()
         new_values = {k: ti.text for k, ti in self.inputs.items()}
-        app.user_data["accounts"][app.cur_acc][app.cur_slot][self.data_type] = new_values
-        app.save_data()
+        if app.cur_acc in app.user_data["accounts"]:
+            app.user_data["accounts"][app.cur_acc][app.cur_slot][self.data_type] = new_values
+            app.save_data()
         self.manager.current = 'slot_menu'
 
-class InfoScreen(DataEntryScreen):
-    keys = INFO_KEYS
-    data_type = "info"
+class InfoScreen(DataEntryScreen): keys = INFO_KEYS; data_type = "info"
+class EquipScreen(DataEntryScreen): keys = EQUIP_KEYS; data_type = "equip"
+class InventoryScreen(DataEntryScreen): keys = ['인벤토리 메모']; data_type = "inv"
+class PhotoScreen(DataEntryScreen): keys = ['사진 경로/설명']; data_type = "photo"
+class StorageScreen(DataEntryScreen): keys = ['보관소 메모']; data_type = "storage"
 
-class EquipScreen(DataEntryScreen):
-    keys = EQUIP_KEYS
-    data_type = "equip"
-
-class InventoryScreen(BaseScreen): pass
-class PhotoScreen(BaseScreen): pass
-class StorageScreen(BaseScreen): pass
-
-# [예방 1-KV]: KV 내부까지 도달하는 #:import 선제 각인
+# [예방 1-KV]: KV 내부 정의 수복 (NameError 차단)
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 #:import Clock kivy.clock.Clock
@@ -155,7 +150,7 @@ KV = '''
         padding: 10
         spacing: 10
         Label:
-            text: "PT Manager v101 [Deep Integrity]"
+            text: "PT Manager v102 [Integrity]"
             size_hint_y: 0.1
         TextInput:
             hint_text: "계정 검색..."
@@ -194,8 +189,8 @@ KV = '''
 <SlotMenuScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 20
-        spacing: 10
+        padding: 15
+        spacing: 8
         Button:
             text: "1. 캐릭터 정보 (세부 18종)"
             on_release: root.manager.current = 'info'
@@ -268,7 +263,7 @@ class PristonApp(App):
         return Builder.load_string(KV)
 
     def load_data(self):
-        # [예방 3]: 데이터 로드 실패 시 자동 생성 및 try-except
+        # [예방 3]: 데이터 로드 실패 시 자동 복구
         try:
             if os.path.exists(DATA_FILE):
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -280,11 +275,11 @@ class PristonApp(App):
         try:
             with open(DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
-        except Exception as e: write_blackbox(f"Save Fail: {e}")
+        except Exception as e: write_blackbox(f"Save Error: {e}")
 
     def on_start(self):
-        # [물리적 격리]: 폰트 주입 지연 (IndexError 방지)
-        Clock.schedule_once(self.apply_font_atomic, 1.5)
+        # [물리적 격리]: 폰트 주입 1.5초 지연 및 분산 처리 (IndexError 박멸)
+        Clock.schedule_once(self.apply_font_safe, 1.5)
         if platform == 'android':
             try:
                 from android.permissions import request_permissions
@@ -293,17 +288,18 @@ class PristonApp(App):
                                     'android.permission.MANAGE_EXTERNAL_STORAGE'])
             except: pass
 
-    def apply_font_atomic(self, dt):
+    def apply_font_safe(self, dt):
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if not os.path.exists(f_p): return
         try:
             LabelBase.register(name="korean", fn_regular=f_p)
+            # 엔진 보호를 위해 스택 기반 반복문 사용
             stack = [self.root]
             while stack:
                 curr = stack.pop()
                 if hasattr(curr, 'font_name'): curr.font_name = "korean"
                 if hasattr(curr, 'children'): stack.extend(curr.children[:])
-        except: pass
+        except Exception as e: write_blackbox(f"Font Error: {e}")
 
 if __name__ == "__main__":
     PristonApp().run()
