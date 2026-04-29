@@ -19,7 +19,7 @@ from kivy.utils import platform
 
 # [환경 설정]: 경로 및 블랙박스 정의
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v95.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v96.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -30,7 +30,7 @@ def write_blackbox(msg):
             f.flush(); os.fsync(f.fileno())
     except: pass
 
-# 강제 생존: 시스템 예외 훅 각인 (죽고 싶어도 죽지 못하게 함)
+# [강제 생존]: 시스템 예외 훅 각인
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
 # [예방 2]: 자가 치유 베이스 스크린 (AttributeError 방지)
@@ -48,7 +48,7 @@ class BaseScreen(Screen):
                 if os.path.exists(bg_path):
                     Rectangle(source=bg_path, pos=self.pos, size=self.size)
                 else:
-                    Color(0.05, 0.1, 0.2, 1) # 배경 부재 시 자동 치유
+                    Color(0.05, 0.1, 0.2, 1) 
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
@@ -126,7 +126,7 @@ class InventoryScreen(BaseScreen): pass
 class PhotoScreen(BaseScreen): pass
 class StorageScreen(BaseScreen): pass
 
-# [수복]: ValueError 방지를 위해 KV 설계도 내 font_name 제거
+# [수복]: ValueError 타이밍 결함 해결을 위해 KV 내 폰트 설정 제거
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -139,11 +139,11 @@ KV = '''
         padding: 15
         spacing: 10
         Label:
-            text: "PristonTale Manager v95"
+            text: "PristonTale Manager v96"
             size_hint_y: 0.1
             font_size: '20sp'
         TextInput:
-            hint_text: "계정 검색..."
+            hint_text: "검색어 입력..."
             size_hint_y: None
             height: '50dp'
             on_text: root.refresh(self.text)
@@ -165,7 +165,7 @@ KV = '''
         padding: 20
         spacing: 15
         Label:
-            text: "캐릭터 슬롯 선택"
+            text: "슬롯 선택"
             size_hint_y: 0.1
         GridLayout:
             id: grid
@@ -252,8 +252,8 @@ class PristonApp(App):
         try:
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"KV Load Failure: {e}")
-            return Label(text="System Loading...")
+            write_blackbox(f"KV Failure: {e}")
+            return Label(text="System Restarting...")
 
     def load_data(self):
         try:
@@ -270,8 +270,8 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Failure: {e}")
 
     def on_start(self):
-        # [물리적 격리]: 폰트 입히기 지연 실행 (ValueError 박멸)
-        Clock.schedule_once(self.apply_font_safe, 0.5)
+        # [물리적 격리]: 폰트 주입을 엔진이 안정화된 이후로 지연 (IndexError 박멸)
+        Clock.schedule_once(self.apply_font_safe, 1.0)
         # [수복]: 문자열 직접 참조로 AttributeError(권한 속성) 박멸
         if platform == 'android':
             try:
@@ -283,23 +283,26 @@ class PristonApp(App):
                 ]
                 request_permissions(perms)
             except Exception as e:
-                write_blackbox(f"Permission Request Error: {e}")
+                write_blackbox(f"Perm Error: {e}")
 
     def apply_font_safe(self, dt):
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="korean", fn_regular=f_p)
+                # [IndexError 방지]: 자식 위젯 순회 시 리스트 복사본 사용
                 for screen in self.root.screens:
                     self.recursive_font_apply(screen)
+                write_blackbox("Integrity Boot: All Systems Normal")
             except Exception as e:
-                write_blackbox(f"Font Load Failure: {e}")
+                write_blackbox(f"Font Apply Error: {e}")
 
     def recursive_font_apply(self, widget):
+        # 자식 리스트 복사본 [:] 을 사용하여 렌더링 도중 인덱스 변화에 대응
         if hasattr(widget, 'font_name'):
             widget.font_name = "korean"
         if hasattr(widget, 'children'):
-            for child in widget.children:
+            for child in widget.children[:]:
                 self.recursive_font_apply(child)
 
 if __name__ == "__main__":
