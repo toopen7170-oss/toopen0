@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1]: 핵심 모듈 선제 고정 (NameError 박멸)
+# [예방 1]: 핵심 모듈 선제 고정 (NameError 차단)
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -17,9 +17,9 @@ from kivy.uix.popup import Popup
 from kivy.graphics import Rectangle, Color
 from kivy.utils import platform
 
-# [환경 설정 및 블랙박스 도입]
+# [환경 설정 및 블랙박스]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v105.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v106.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -29,10 +29,10 @@ def write_blackbox(msg):
             f.write(f"[{ts}] {msg}\n")
     except: pass
 
-# [강제 생존]: 시스템 예외 훅 표준화
+# [강제 생존]: 시스템 예외 훅
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [예방 2]: 자가 치유 베이스 스크린 (배경 정보 누락 예방)
+# [예방 2]: 자가 치유 베이스 스크린
 class BaseScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -49,7 +49,7 @@ class BaseScreen(Screen):
                     Color(0.05, 0.1, 0.2, 1); Rectangle(pos=self.pos, size=self.size)
         except: pass
 
-# [세부 목록]: 7대 창 기능 전수 수복 (18종 + 11종 필드)
+# [세부 목록]: 18종 정보 + 11종 장비 필드
 INFO_KEYS = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
 EQUIP_KEYS = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
 
@@ -141,7 +141,7 @@ class InventoryScreen(DataEntryScreen): keys = ['아이템 목록/수량']; data
 class PhotoScreen(DataEntryScreen): keys = ['사진 메모/설명']; data_type = "photo"
 class StorageScreen(DataEntryScreen): keys = ['보관소 위치/내용']; data_type = "storage"
 
-# [예방 1-KV]: 내부 인식 및 [물리 봉쇄] 전역 스타일 각인
+# [예방 1-KV]: ParserException 수복 및 물리 봉쇄 스타일 각인
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 #:import Clock kivy.clock.Clock
@@ -152,53 +152,70 @@ KV = '''
 <MainScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 10; spacing: 10
+        padding: 10
+        spacing: 10
         Label:
-            text: "PT Manager v105 [Immortal]"
+            text: "PT Manager v106 [Standard]"
             size_hint_y: 0.1
         TextInput:
             hint_text: "계정 검색..."
-            size_hint_y: None; height: '50dp'
+            size_hint_y: None
+            height: '50dp'
             on_text: root.refresh(self.text)
         ScrollView:
             BoxLayout:
                 id: acc_list
                 orientation: 'vertical'
-                size_hint_y: None; height: self.minimum_height
+                size_hint_y: None
+                height: self.minimum_height
                 spacing: 5
         Button:
             text: "새 계정 생성"
-            size_hint_y: 0.1; on_release: root.create_acc()
+            size_hint_y: 0.1
+            on_release: root.create_acc()
 
 <CharSelectScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 20; spacing: 15
+        padding: 20
+        spacing: 15
         Label:
-            text: "캐릭터 슬롯 선택 (1~6)"; size_hint_y: 0.1
+            text: "캐릭터 슬롯 선택 (1~6)"
+            size_hint_y: 0.1
         GridLayout:
-            id: grid; cols: 2; spacing: 10
+            id: grid
+            cols: 2
+            spacing: 10
         Button:
-            text: "이전으로"; size_hint_y: 0.15; on_release: root.manager.current = 'main'
+            text: "이전으로"
+            size_hint_y: 0.15
+            on_release: root.manager.current = 'main'
 
 <SlotMenuScreen>:
     BoxLayout:
         orientation: 'vertical'
-        padding: 15; spacing: 8
+        padding: 15
+        spacing: 8
         Button:
-            text: "1. 캐릭터 정보 (18종 필드)"; on_release: root.manager.current = 'info'
+            text: "1. 캐릭터 정보 (18종)"
+            on_release: root.manager.current = 'info'
         Button:
-            text: "2. 캐릭터 장비 (11종 필드)"; on_release: root.manager.current = 'equip'
+            text: "2. 캐릭터 장비 (11종)"
+            on_release: root.manager.current = 'equip'
         Button:
-            text: "3. 인벤토리창"; on_release: root.manager.current = 'inv'
+            text: "3. 인벤토리창"
+            on_release: root.manager.current = 'inv'
         Button:
-            text: "4. 사진선택창"; on_release: root.manager.current = 'photo'
+            text: "4. 사진선택창"
+            on_release: root.manager.current = 'photo'
         Button:
-            text: "5. 저장보관소"; on_release: root.manager.current = 'storage'
+            text: "5. 저장보관소"
+            on_release: root.manager.current = 'storage'
         Widget:
             size_hint_y: 0.1
         Button:
-            text: "이전으로"; on_release: root.manager.current = 'char_select'
+            text: "이전으로"
+            on_release: root.manager.current = 'char_select'
 
 <InfoScreen>, <EquipScreen>, <InventoryScreen>, <PhotoScreen>, <StorageScreen>:
     BoxLayout:
@@ -206,39 +223,52 @@ KV = '''
         padding: 10
         ScrollView:
             BoxLayout:
-                id: container; orientation: 'vertical'
-                size_hint_y: None; height: self.minimum_height
+                id: container
+                orientation: 'vertical'
+                size_hint_y: None
+                height: self.minimum_height
                 spacing: 5
         BoxLayout:
-            size_hint_y: 0.15; spacing: 10
+            size_hint_y: 0.15
+            spacing: 10
             Button:
-                text: "데이터 저장"; on_release: root.save()
+                text: "데이터 저장"
+                on_release: root.save()
             Button:
-                text: "취소"; on_release: root.manager.current = 'slot_menu'
+                text: "취소"
+                on_release: root.manager.current = 'slot_menu'
 
 ScreenManager:
     transition: FadeTransition()
-    MainScreen: {name: 'main'}
-    CharSelectScreen: {name: 'char_select'}
-    SlotMenuScreen: {name: 'slot_menu'}
-    InfoScreen: {name: 'info'}
-    EquipScreen: {name: 'equip'}
-    InventoryScreen: {name: 'inv'}
-    PhotoScreen: {name: 'photo'}
-    StorageScreen: {name: 'storage'}
+    MainScreen:
+        name: 'main'
+    CharSelectScreen:
+        name: 'char_select'
+    SlotMenuScreen:
+        name: 'slot_menu'
+    InfoScreen:
+        name: 'info'
+    EquipScreen:
+        name: 'equip'
+    InventoryScreen:
+        name: 'inv'
+    PhotoScreen:
+        name: 'photo'
+    StorageScreen:
+        name: 'storage'
 '''
 
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
-    font_loaded = False # 전역 스타일 제어용
+    font_loaded = False 
 
     def build(self):
         self.load_data()
         return Builder.load_string(KV)
 
     def load_data(self):
-        # [예방 3]: 데이터 강제 생존 (자동 생성 로직)
+        # [예방 3]: 데이터 강제 생존
         try:
             if os.path.exists(DATA_FILE):
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -253,7 +283,6 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Failure: {e}")
 
     def on_start(self):
-        # [IndexError 박멸]: 위젯 직접 수정이 아닌 엔진 주도적 폰트 적용
         Clock.schedule_once(self.load_font_atomic, 1.0)
         if platform == 'android':
             try:
@@ -268,8 +297,8 @@ class PristonApp(App):
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="korean", fn_regular=f_p)
-                self.font_loaded = True # KV 전역 스타일 트리거
-                write_blackbox("Font Atomic Load Success")
+                self.font_loaded = True 
+                write_blackbox("Font Load Success")
             except Exception as e: write_blackbox(f"Font Error: {e}")
 
 if __name__ == "__main__":
