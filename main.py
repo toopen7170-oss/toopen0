@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1]: 모든 핵심 모듈 #:import 선제 고정 (NameError 원천 차단)
+# [예방 1-파이썬]: 핵심 모듈 선제 고정
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -19,7 +19,7 @@ from kivy.utils import platform
 
 # [환경 설정]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v100.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v101.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -32,7 +32,7 @@ def write_blackbox(msg):
 # [강제 생존]: 시스템 예외 훅
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [예방 2]: 자가 치유 베이스 스크린 (배경 정보 누락 예방)
+# [예방 2]: 자가 치유 베이스 스크린
 class BaseScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -51,7 +51,7 @@ class BaseScreen(Screen):
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
-# [세부 목록]: 데이터 연동 필드 정의
+# [세부 목록 데이터 필드]
 INFO_KEYS = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
 EQUIP_KEYS = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
 
@@ -114,7 +114,9 @@ class DataEntryScreen(BaseScreen):
     def on_enter(self):
         self.ids.container.clear_widgets()
         app = App.get_running_app()
-        current_data = app.user_data["accounts"][app.cur_acc][app.cur_slot].get(self.data_type, {})
+        acc = app.user_data["accounts"].get(app.cur_acc, {})
+        slot_data = acc.get(app.cur_slot, {})
+        current_data = slot_data.get(self.data_type, {})
         self.inputs = {}
         for k in self.keys:
             row = BoxLayout(size_hint_y=None, height="50dp", spacing=10)
@@ -125,8 +127,8 @@ class DataEntryScreen(BaseScreen):
             self.ids.container.add_widget(row)
     def save(self):
         app = App.get_running_app()
-        new_data = {k: ti.text for k, ti.text in self.inputs.items()}
-        app.user_data["accounts"][app.cur_acc][app.cur_slot][self.data_type] = new_data
+        new_values = {k: ti.text for k, ti in self.inputs.items()}
+        app.user_data["accounts"][app.cur_acc][app.cur_slot][self.data_type] = new_values
         app.save_data()
         self.manager.current = 'slot_menu'
 
@@ -142,14 +144,18 @@ class InventoryScreen(BaseScreen): pass
 class PhotoScreen(BaseScreen): pass
 class StorageScreen(BaseScreen): pass
 
+# [예방 1-KV]: KV 내부까지 도달하는 #:import 선제 각인
 KV = '''
+#:import FadeTransition kivy.uix.screenmanager.FadeTransition
+#:import Clock kivy.clock.Clock
+
 <MainScreen>:
     BoxLayout:
         orientation: 'vertical'
         padding: 10
         spacing: 10
         Label:
-            text: "PT Manager v100 [Full Spec]"
+            text: "PT Manager v101 [Deep Integrity]"
             size_hint_y: 0.1
         TextInput:
             hint_text: "계정 검색..."
@@ -191,10 +197,10 @@ KV = '''
         padding: 20
         spacing: 10
         Button:
-            text: "1. 캐릭터 정보 (세부18종)"
+            text: "1. 캐릭터 정보 (세부 18종)"
             on_release: root.manager.current = 'info'
         Button:
-            text: "2. 캐릭터 장비 (세부11종)"
+            text: "2. 캐릭터 장비 (세부 11종)"
             on_release: root.manager.current = 'equip'
         Button:
             text: "3. 인벤토리창"
@@ -262,7 +268,7 @@ class PristonApp(App):
         return Builder.load_string(KV)
 
     def load_data(self):
-        # [예방 3]: 데이터 로드 실패 시 자동 생성 로직
+        # [예방 3]: 데이터 로드 실패 시 자동 생성 및 try-except
         try:
             if os.path.exists(DATA_FILE):
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -277,7 +283,7 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Fail: {e}")
 
     def on_start(self):
-        # [물리적 격리]: 폰트 주입 1.5초 지연 (IndexError 방지)
+        # [물리적 격리]: 폰트 주입 지연 (IndexError 방지)
         Clock.schedule_once(self.apply_font_atomic, 1.5)
         if platform == 'android':
             try:
