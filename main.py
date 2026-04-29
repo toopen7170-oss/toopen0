@@ -19,7 +19,7 @@ from kivy.utils import platform
 
 # [환경 설정]: 경로 및 블랙박스 정의
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v96.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v97.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -30,7 +30,7 @@ def write_blackbox(msg):
             f.flush(); os.fsync(f.fileno())
     except: pass
 
-# [강제 생존]: 시스템 예외 훅 각인
+# [강제 생존]: 시스템 예외 훅 각인 (죽지 않는 앱의 핵심)
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
 # [예방 2]: 자가 치유 베이스 스크린 (AttributeError 방지)
@@ -48,7 +48,7 @@ class BaseScreen(Screen):
                 if os.path.exists(bg_path):
                     Rectangle(source=bg_path, pos=self.pos, size=self.size)
                 else:
-                    Color(0.05, 0.1, 0.2, 1) 
+                    Color(0.05, 0.1, 0.2, 1) # 파일 부재 시 남색 배경 자동 치유
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
@@ -73,7 +73,7 @@ class MainScreen(BaseScreen):
     def delete_pop(self, aid):
         pop = Popup(title="삭제 확인", size_hint=(0.8, 0.4))
         cnt = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        cnt.add_widget(Label(text=f"{aid} 삭제하시겠습니까?"))
+        cnt.add_widget(Label(text=f"{aid} 계정을 삭제하시겠습니까?"))
         btn_r = BoxLayout(size_hint_y=0.4, spacing=10)
         btn_r.add_widget(Button(text="삭제", on_release=lambda x: self.do_del(aid, pop)))
         btn_r.add_widget(Button(text="취소", on_release=pop.dismiss))
@@ -94,7 +94,7 @@ class CharSelectScreen(BaseScreen):
     def on_enter(self):
         self.ids.grid.clear_widgets()
         for i in range(1, 7):
-            btn = Button(text=f"Slot {i}", background_color=(0.2, 0.6, 0.3, 0.7))
+            btn = Button(text=f"슬롯 {i}", background_color=(0.2, 0.6, 0.3, 0.7))
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, idx):
@@ -126,7 +126,7 @@ class InventoryScreen(BaseScreen): pass
 class PhotoScreen(BaseScreen): pass
 class StorageScreen(BaseScreen): pass
 
-# [수복]: ValueError 타이밍 결함 해결을 위해 KV 내 폰트 설정 제거
+# [수복]: ValueError 타이밍 결함 방지를 위해 KV 내부 폰트 설정 제거
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -139,11 +139,11 @@ KV = '''
         padding: 15
         spacing: 10
         Label:
-            text: "PristonTale Manager v96"
+            text: "PT Manager v97 [Integrity]"
             size_hint_y: 0.1
             font_size: '20sp'
         TextInput:
-            hint_text: "검색어 입력..."
+            hint_text: "계정 검색..."
             size_hint_y: None
             height: '50dp'
             on_text: root.refresh(self.text)
@@ -165,7 +165,7 @@ KV = '''
         padding: 20
         spacing: 15
         Label:
-            text: "슬롯 선택"
+            text: "캐릭터 슬롯 선택"
             size_hint_y: 0.1
         GridLayout:
             id: grid
@@ -247,13 +247,13 @@ class PristonApp(App):
     user_data = {"accounts": {}}
     
     def build(self):
-        # [예방 3]: 데이터 로드 실패 시 빈 딕셔너리 즉시 생성
+        # [예방 3]: 데이터 로드 실패 시 빈 딕셔너리 즉시 생성 (JSON 무결성)
         self.load_data()
         try:
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"KV Failure: {e}")
-            return Label(text="System Restarting...")
+            write_blackbox(f"KV Engine Error: {e}")
+            return Label(text="System Initializing...")
 
     def load_data(self):
         try:
@@ -267,12 +267,12 @@ class PristonApp(App):
         try:
             with open(DATA_FILE, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
-        except Exception as e: write_blackbox(f"Save Failure: {e}")
+        except Exception as e: write_blackbox(f"Data Save Failure: {e}")
 
     def on_start(self):
-        # [물리적 격리]: 폰트 주입을 엔진이 안정화된 이후로 지연 (IndexError 박멸)
-        Clock.schedule_once(self.apply_font_safe, 1.0)
-        # [수복]: 문자열 직접 참조로 AttributeError(권한 속성) 박멸
+        # [물리적 격리]: 폰트 주입을 엔진 안정화 이후(1.2초)로 지연하여 IndexError 박멸
+        Clock.schedule_once(self.apply_font_safe, 1.2)
+        # [수복]: 안드로이드 14 호환을 위해 문자열 직접 참조 (AttributeError 박멸)
         if platform == 'android':
             try:
                 from android.permissions import request_permissions
@@ -283,22 +283,22 @@ class PristonApp(App):
                 ]
                 request_permissions(perms)
             except Exception as e:
-                write_blackbox(f"Perm Error: {e}")
+                write_blackbox(f"Permission Blocked: {e}")
 
     def apply_font_safe(self, dt):
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
                 LabelBase.register(name="korean", fn_regular=f_p)
-                # [IndexError 방지]: 자식 위젯 순회 시 리스트 복사본 사용
+                # [IndexError 방지]: 자식 위젯 순회 시 리스트 복사본[:] 사용
                 for screen in self.root.screens:
                     self.recursive_font_apply(screen)
-                write_blackbox("Integrity Boot: All Systems Normal")
+                write_blackbox("All Systems Stable: 100% Integrity")
             except Exception as e:
-                write_blackbox(f"Font Apply Error: {e}")
+                write_blackbox(f"Font Injection Failed: {e}")
 
     def recursive_font_apply(self, widget):
-        # 자식 리스트 복사본 [:] 을 사용하여 렌더링 도중 인덱스 변화에 대응
+        # 렌더링 스택 보호를 위해 자식 리스트 복사본 사용
         if hasattr(widget, 'font_name'):
             widget.font_name = "korean"
         if hasattr(widget, 'children'):
