@@ -1,7 +1,5 @@
 import os, sys, traceback, json
 from datetime import datetime
-
-# [1. 환경 설정 및 모듈 로드]
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -16,7 +14,7 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 & 자가 진단 시스템]
+# [1. 블랙박스 & 자가 진단 시스템]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
 EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
@@ -29,11 +27,28 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
-# 원칙: 어떤 오류가 발생해도 블랙박스에 가두고 앱은 강제 생존시킨다.
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 문법 오류 및 스레드 충돌 완전 수복
-class MainScreen(Screen):
+# [2. 스크린 로직]: 배경화면 전체 확장 및 자가 치유 적용
+class BaseScreen(Screen):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        # 물리 봉쇄: 화면 크기가 결정되는 즉시 배경을 꽉 채움 (1번 사진 규격)
+        self.bind(size=self._update_bg, pos=self._update_bg)
+
+    def _update_bg(self, instance, value):
+        self.canvas.before.clear()
+        with self.canvas.before:
+            bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
+            Color(1, 1, 1, 1)
+            if os.path.exists(bg_p):
+                Rectangle(source=bg_p, pos=self.pos, size=self.size)
+            else:
+                # 배경 파일 없을 경우 어두운 테마 유지
+                Color(0.1, 0.1, 0.1, 1)
+                Rectangle(pos=self.pos, size=self.size)
+
+class MainScreen(BaseScreen):
     def on_enter(self):
         Clock.schedule_once(lambda dt: self.refresh(), 0.1)
 
@@ -64,7 +79,7 @@ class MainScreen(Screen):
         App.get_running_app().cur_acc = aid
         self.manager.current = 'char_select'
 
-class CharSelectScreen(Screen):
+class CharSelectScreen(BaseScreen):
     def on_enter(self):
         try:
             self.ids.grid.clear_widgets()
@@ -78,9 +93,9 @@ class CharSelectScreen(Screen):
         App.get_running_app().cur_slot = str(idx)
         self.manager.current = 'slot_menu'
 
-class SlotMenuScreen(Screen): pass
+class SlotMenuScreen(BaseScreen): pass
 
-class InfoScreen(Screen):
+class InfoScreen(BaseScreen):
     def on_enter(self):
         try:
             self.ids.box.clear_widgets()
@@ -92,7 +107,7 @@ class InfoScreen(Screen):
                 self.ids.box.add_widget(row)
         except Exception as e: write_blackbox(f"Info Error: {e}")
 
-class EquipScreen(Screen):
+class EquipScreen(BaseScreen):
     def on_enter(self):
         try:
             self.ids.box.clear_widgets()
@@ -104,11 +119,11 @@ class EquipScreen(Screen):
                 self.ids.box.add_widget(row)
         except Exception as e: write_blackbox(f"Equip Error: {e}")
 
-class InventoryScreen(Screen): pass
-class PhotoScreen(Screen): pass
-class StorageScreen(Screen): pass
+class InventoryScreen(BaseScreen): pass
+class PhotoScreen(BaseScreen): pass
+class StorageScreen(BaseScreen): pass
 
-# [4. KV 설계도]: 2중 부품 신고 및 한 줄 표기법 표준화
+# [3. KV 설계도]: 투명 버튼 + 전체 배경 (1번 사진 스타일)
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -120,7 +135,7 @@ KV = '''
 <Button>:
     font_name: app.custom_font
     background_normal: ''
-    background_color: 0.18, 0.49, 0.2, 0.6
+    background_color: 0.1, 0.4, 0.2, 0.6  # 투명도 적용된 녹색 (1번 사진 스타일)
 
 <MainScreen>:
     BoxLayout:
@@ -128,7 +143,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v74 (Memory)"
+            text: "PristonTale Manager v76 (Unified)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -246,24 +261,21 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]: 폰트 해방 및 그래픽 동기화
+# [4. 앱 엔진]: 폰트 징발 및 무결성 유지
 class PristonApp(App):
     user_data = {"accounts": {}}
     custom_font = "Roboto"
 
     def build(self):
-        # 1차: 메모리 기반 폰트 등록 시도
+        # 자가 치유: 폰트 강제 하이재킹
         self.apply_safe_font()
-        # 2차: 설계도 로딩
         return Builder.load_string(KV)
 
     def on_start(self):
         self.load_data()
-        # 그래픽 박자 맞추기
-        Clock.schedule_once(self.apply_background, 0.5)
 
     def apply_safe_font(self):
-        # 수복: SDL2 엔진의 자산 접근 거부를 우회하기 위한 시스템 폰트 강제 매핑
+        # 수복: 시스템 폰트를 직접 타격하여 한글 깨짐 방지
         font_paths = [
             os.path.join(DOWNLOAD_PATH, "font.ttf"),
             "/system/fonts/NanumGothic.ttf",
@@ -273,7 +285,6 @@ class PristonApp(App):
         for path in font_paths:
             try:
                 if os.path.exists(path):
-                    # 중요: 폰트 파일이 열리는지 파이썬 레벨에서 먼저 검증
                     with open(path, 'rb') as f: f.read(10)
                     LabelBase.register(name="korean", fn_regular=path)
                     self.custom_font = "korean"
@@ -282,20 +293,9 @@ class PristonApp(App):
             except: continue
         write_blackbox("All fonts failed. Using Roboto.")
 
-    def apply_background(self, *args):
-        try:
-            bg_p = os.path.join(DOWNLOAD_PATH, "bg.png")
-            if os.path.exists(bg_p):
-                for sc in self.root.screens:
-                    with sc.canvas.before:
-                        Color(1, 1, 1, 1)
-                        Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
-                write_blackbox("BG Synced.")
-        except Exception as e: write_blackbox(f"BG Error: {e}")
-
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v74.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v76.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -303,7 +303,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v74.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v76.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
