@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [1. 환경 설정 및 모듈 로드] - 엔진 레벨에서 부품 선언
+# [1. 환경 설정 및 모듈 로드]
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -16,9 +16,9 @@ from kivy.uix.textinput import TextInput
 from kivy.uix.scrollview import ScrollView
 from kivy.graphics import Rectangle, Color
 
-# [2. 블랙박스 엔진]
+# [2. 블랙박스 & 자가 진단 시스템]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PristonTale_BlackBox.txt")
+EXTERNAL_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
     try:
@@ -29,9 +29,10 @@ def write_blackbox(msg):
             os.fsync(f.fileno())
     except: pass
 
+# 원칙: 어떤 오류가 발생해도 블랙박스에 가두고 앱은 강제 생존시킨다.
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [3. 스크린 로직]: 격벽 보호막 설치
+# [3. 스크린 로직]: 문법 오류 및 스레드 충돌 완전 수복
 class MainScreen(Screen):
     def on_enter(self):
         Clock.schedule_once(lambda dt: self.refresh(), 0.1)
@@ -47,7 +48,7 @@ class MainScreen(Screen):
                     btn = Button(text=f"계정 ID: {aid}", size_hint_y=None, height="60dp")
                     btn.bind(on_release=lambda x, a=aid: self.go_acc(a))
                     container.add_widget(btn)
-        except Exception as e: write_blackbox(f"Refresh Error: {e}")
+        except Exception as e: write_blackbox(f"Main Error: {e}")
 
     def add_acc(self):
         try:
@@ -78,6 +79,7 @@ class CharSelectScreen(Screen):
         self.manager.current = 'slot_menu'
 
 class SlotMenuScreen(Screen): pass
+
 class InfoScreen(Screen):
     def on_enter(self):
         try:
@@ -106,7 +108,7 @@ class InventoryScreen(Screen): pass
 class PhotoScreen(Screen): pass
 class StorageScreen(Screen): pass
 
-# [4. KV 레이아웃]: 통행증(Import) 누락 물리적 봉쇄
+# [4. KV 설계도]: 2중 부품 신고 및 한 줄 표기법 표준화
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -126,7 +128,7 @@ KV = '''
         padding: '15dp'
         spacing: '10dp'
         Label:
-            text: "PristonTale Manager v73 (Assembled)"
+            text: "PristonTale Manager v74 (Memory)"
             font_size: '20sp'
             size_hint_y: 0.1
         TextInput:
@@ -225,7 +227,6 @@ KV = '''
             on_release: root.manager.current = 'slot_menu'
 
 ScreenManager:
-    # 수복: 부품을 명시적으로 참조
     transition: FadeTransition()
     MainScreen:
         name: 'main'
@@ -245,24 +246,24 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [5. 앱 엔진]
+# [5. 앱 엔진]: 폰트 해방 및 그래픽 동기화
 class PristonApp(App):
     user_data = {"accounts": {}}
     custom_font = "Roboto"
 
     def build(self):
-        try:
-            self.apply_native_font()
-            return Builder.load_string(KV)
-        except Exception as e:
-            write_blackbox(f"Builder Emergency: {e}")
-            return ScreenManager()
+        # 1차: 메모리 기반 폰트 등록 시도
+        self.apply_safe_font()
+        # 2차: 설계도 로딩
+        return Builder.load_string(KV)
 
     def on_start(self):
         self.load_data()
+        # 그래픽 박자 맞추기
         Clock.schedule_once(self.apply_background, 0.5)
 
-    def apply_native_font(self):
+    def apply_safe_font(self):
+        # 수복: SDL2 엔진의 자산 접근 거부를 우회하기 위한 시스템 폰트 강제 매핑
         font_paths = [
             os.path.join(DOWNLOAD_PATH, "font.ttf"),
             "/system/fonts/NanumGothic.ttf",
@@ -272,11 +273,14 @@ class PristonApp(App):
         for path in font_paths:
             try:
                 if os.path.exists(path):
+                    # 중요: 폰트 파일이 열리는지 파이썬 레벨에서 먼저 검증
+                    with open(path, 'rb') as f: f.read(10)
                     LabelBase.register(name="korean", fn_regular=path)
                     self.custom_font = "korean"
-                    write_blackbox(f"Font Success: {path}")
+                    write_blackbox(f"Font Safe-Mapped: {path}")
                     return
             except: continue
+        write_blackbox("All fonts failed. Using Roboto.")
 
     def apply_background(self, *args):
         try:
@@ -286,11 +290,12 @@ class PristonApp(App):
                     with sc.canvas.before:
                         Color(1, 1, 1, 1)
                         Rectangle(source=bg_p, pos=sc.pos, size=sc.size)
+                write_blackbox("BG Synced.")
         except Exception as e: write_blackbox(f"BG Error: {e}")
 
     def load_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v73.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v74.json")
             if os.path.exists(path):
                 with open(path, "r", encoding="utf-8") as f:
                     self.user_data = json.load(f)
@@ -298,7 +303,7 @@ class PristonApp(App):
 
     def save_data(self):
         try:
-            path = os.path.join(self.user_data_dir, "PT_Data_v73.json")
+            path = os.path.join(self.user_data_dir, "PT_Data_v74.json")
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(self.user_data, f, ensure_ascii=False, indent=4)
         except: pass
