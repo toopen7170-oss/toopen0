@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1]: 모든 핵심 모듈 #:import 선제 고정 (NameError 봉쇄)
+# [예방 1]: 모든 핵심 모듈 #:import 선제 고정 (NameError 원천 차단)
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -19,7 +19,7 @@ from kivy.utils import platform
 
 # [환경 설정]: 경로 및 블랙박스 정의
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v94.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v95.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -30,7 +30,7 @@ def write_blackbox(msg):
             f.flush(); os.fsync(f.fileno())
     except: pass
 
-# 강제 생존: 시스템 예외 훅 각인
+# 강제 생존: 시스템 예외 훅 각인 (죽고 싶어도 죽지 못하게 함)
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
 # [예방 2]: 자가 치유 베이스 스크린 (AttributeError 방지)
@@ -48,7 +48,7 @@ class BaseScreen(Screen):
                 if os.path.exists(bg_path):
                     Rectangle(source=bg_path, pos=self.pos, size=self.size)
                 else:
-                    Color(0.05, 0.1, 0.2, 1) # 파일 부재 시 남색 배경 자동 치유
+                    Color(0.05, 0.1, 0.2, 1) # 배경 부재 시 자동 치유
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
@@ -73,7 +73,7 @@ class MainScreen(BaseScreen):
     def delete_pop(self, aid):
         pop = Popup(title="삭제 확인", size_hint=(0.8, 0.4))
         cnt = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        cnt.add_widget(Label(text=f"{aid} 계정을 삭제하시겠습니까?"))
+        cnt.add_widget(Label(text=f"{aid} 삭제하시겠습니까?"))
         btn_r = BoxLayout(size_hint_y=0.4, spacing=10)
         btn_r.add_widget(Button(text="삭제", on_release=lambda x: self.do_del(aid, pop)))
         btn_r.add_widget(Button(text="취소", on_release=pop.dismiss))
@@ -94,7 +94,7 @@ class CharSelectScreen(BaseScreen):
     def on_enter(self):
         self.ids.grid.clear_widgets()
         for i in range(1, 7):
-            btn = Button(text=f"캐릭터 슬롯 {i}", background_color=(0.2, 0.6, 0.3, 0.7))
+            btn = Button(text=f"Slot {i}", background_color=(0.2, 0.6, 0.3, 0.7))
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, idx):
@@ -126,7 +126,7 @@ class InventoryScreen(BaseScreen): pass
 class PhotoScreen(BaseScreen): pass
 class StorageScreen(BaseScreen): pass
 
-# [수복]: ValueError 방지를 위해 KV 설계도 내 font_name 완전 삭제
+# [수복]: ValueError 방지를 위해 KV 설계도 내 font_name 제거
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
@@ -139,7 +139,7 @@ KV = '''
         padding: 15
         spacing: 10
         Label:
-            text: "PristonTale Manager v94"
+            text: "PristonTale Manager v95"
             size_hint_y: 0.1
             font_size: '20sp'
         TextInput:
@@ -252,8 +252,8 @@ class PristonApp(App):
         try:
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"KV Critical Error: {e}")
-            return Label(text="System Integrity Failure")
+            write_blackbox(f"KV Load Failure: {e}")
+            return Label(text="System Loading...")
 
     def load_data(self):
         try:
@@ -270,24 +270,30 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Failure: {e}")
 
     def on_start(self):
-        # [물리적 격리]: 앱이 완전히 켜진 후 폰트 동적 주입
+        # [물리적 격리]: 폰트 입히기 지연 실행 (ValueError 박멸)
         Clock.schedule_once(self.apply_font_safe, 0.5)
+        # [수복]: 문자열 직접 참조로 AttributeError(권한 속성) 박멸
         if platform == 'android':
-            from android.permissions import request_permissions, Permission
-            request_permissions([Permission.MANAGE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
+            try:
+                from android.permissions import request_permissions
+                perms = [
+                    'android.permission.READ_EXTERNAL_STORAGE',
+                    'android.permission.WRITE_EXTERNAL_STORAGE',
+                    'android.permission.MANAGE_EXTERNAL_STORAGE'
+                ]
+                request_permissions(perms)
+            except Exception as e:
+                write_blackbox(f"Permission Request Error: {e}")
 
     def apply_font_safe(self, dt):
         f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
         if os.path.exists(f_p):
             try:
-                # 폰트 등록
                 LabelBase.register(name="korean", fn_regular=f_p)
-                # 모든 폰트 적용 대상에 동적 입히기
                 for screen in self.root.screens:
                     self.recursive_font_apply(screen)
-                write_blackbox("Font Applied Successfully")
             except Exception as e:
-                write_blackbox(f"Font Apply Delayed/Failed: {e}")
+                write_blackbox(f"Font Load Failure: {e}")
 
     def recursive_font_apply(self, widget):
         if hasattr(widget, 'font_name'):
