@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1]: 모듈 선제 고정 (NameError 봉쇄)
+# [예방 1]: 모든 핵심 모듈 #:import 선제 고정 (NameError 봉쇄)
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -19,24 +19,21 @@ from kivy.utils import platform
 
 # [환경 설정]: 경로 및 블랙박스 정의
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v93.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v94.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
-# [블랙박스]: 팅김 전 물리 각인 시스템
 def write_blackbox(msg):
     try:
         ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(BLACKBOX_LOG, "a", encoding="utf-8") as f:
             f.write(f"[{ts}] {msg}\n")
-            f.flush()
-            os.fsync(f.fileno())
-    except:
-        print(f"Log Failure: {msg}")
+            f.flush(); os.fsync(f.fileno())
+    except: pass
 
 # 강제 생존: 시스템 예외 훅 각인
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [예방 2]: 자가 치유 베이스 스크린
+# [예방 2]: 자가 치유 베이스 스크린 (AttributeError 방지)
 class BaseScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -51,11 +48,11 @@ class BaseScreen(Screen):
                 if os.path.exists(bg_path):
                     Rectangle(source=bg_path, pos=self.pos, size=self.size)
                 else:
-                    Color(0.05, 0.1, 0.2, 1)
+                    Color(0.05, 0.1, 0.2, 1) # 파일 부재 시 남색 배경 자동 치유
                     Rectangle(pos=self.pos, size=self.size)
         except: pass
 
-# [제1 기본원칙]: 7대 창 및 비즈니스 로직
+# [비즈니스 로직]: 7대 창 구현
 class MainScreen(BaseScreen):
     def on_enter(self): Clock.schedule_once(lambda dt: self.refresh(), 0.1)
     def refresh(self, search=""):
@@ -76,11 +73,11 @@ class MainScreen(BaseScreen):
     def delete_pop(self, aid):
         pop = Popup(title="삭제 확인", size_hint=(0.8, 0.4))
         cnt = BoxLayout(orientation='vertical', padding=10, spacing=10)
-        cnt.add_widget(Label(text=f"계정 {aid}를 삭제할까요?"))
+        cnt.add_widget(Label(text=f"{aid} 계정을 삭제하시겠습니까?"))
         btn_r = BoxLayout(size_hint_y=0.4, spacing=10)
-        yes = Button(text="삭제", on_release=lambda x: self.do_del(aid, pop))
-        no = Button(text="취소", on_release=pop.dismiss)
-        btn_r.add_widget(yes); btn_r.add_widget(no); cnt.add_widget(btn_r); pop.content=cnt; pop.open()
+        btn_r.add_widget(Button(text="삭제", on_release=lambda x: self.do_del(aid, pop)))
+        btn_r.add_widget(Button(text="취소", on_release=pop.dismiss))
+        cnt.add_widget(btn_r); pop.content=cnt; pop.open()
     def do_del(self, aid, pop):
         app = App.get_running_app()
         if aid in app.user_data["accounts"]:
@@ -97,7 +94,7 @@ class CharSelectScreen(BaseScreen):
     def on_enter(self):
         self.ids.grid.clear_widgets()
         for i in range(1, 7):
-            btn = Button(text=f"Slot {i}", background_color=(0.2, 0.6, 0.3, 0.7))
+            btn = Button(text=f"캐릭터 슬롯 {i}", background_color=(0.2, 0.6, 0.3, 0.7))
             btn.bind(on_release=lambda x, idx=i: self.go_slot(idx))
             self.ids.grid.add_widget(btn)
     def go_slot(self, idx):
@@ -129,16 +126,12 @@ class InventoryScreen(BaseScreen): pass
 class PhotoScreen(BaseScreen): pass
 class StorageScreen(BaseScreen): pass
 
-# [수복]: ParserException 방지를 위한 표준 문법 재정렬
+# [수복]: ValueError 방지를 위해 KV 설계도 내 font_name 완전 삭제
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
 <Label>:
-    font_name: app.custom_font
     outline_width: 1
-
-<Button>:
-    font_name: app.custom_font
 
 <MainScreen>:
     BoxLayout:
@@ -146,11 +139,11 @@ KV = '''
         padding: 15
         spacing: 10
         Label:
-            text: "PristonTale Manager v93"
+            text: "PristonTale Manager v94"
             size_hint_y: 0.1
             font_size: '20sp'
         TextInput:
-            hint_text: "통합 검색..."
+            hint_text: "계정 검색..."
             size_hint_y: None
             height: '50dp'
             on_text: root.refresh(self.text)
@@ -250,37 +243,17 @@ ScreenManager:
         name: 'storage'
 '''
 
-# [앱 엔진]: 강제 생존 및 자가 치유 시스템
 class PristonApp(App):
     user_data = {"accounts": {}}
-    custom_font = "Roboto"
-
+    
     def build(self):
-        self.apply_integrity()
+        # [예방 3]: 데이터 로드 실패 시 빈 딕셔너리 즉시 생성
+        self.load_data()
         try:
             return Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"KV Load Failure: {e}")
-            # 치명적 문법 오류 발생 시 긴급 복구용 UI 사출
-            return Label(text="System Error: Check BlackBox")
-
-    def apply_integrity(self):
-        # 폰트 진단 및 자가 치유
-        f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
-        if os.path.exists(f_p):
-            try:
-                LabelBase.register(name="korean", fn_regular=f_p)
-                self.custom_font = "korean"
-            except: self.custom_font = "Roboto"
-        # 데이터 무결성 진단 (예방 3)
-        self.load_data()
-
-    def ask_perms(self, *args):
-        if platform == 'android':
-            try:
-                from android.permissions import request_permissions, Permission
-                request_permissions([Permission.READ_MEDIA_IMAGES, Permission.MANAGE_EXTERNAL_STORAGE])
-            except: pass
+            write_blackbox(f"KV Critical Error: {e}")
+            return Label(text="System Integrity Failure")
 
     def load_data(self):
         try:
@@ -297,8 +270,31 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Failure: {e}")
 
     def on_start(self):
-        Clock.schedule_once(self.ask_perms, 1)
-        write_blackbox("System Integrity v93: Final Stable Boot")
+        # [물리적 격리]: 앱이 완전히 켜진 후 폰트 동적 주입
+        Clock.schedule_once(self.apply_font_safe, 0.5)
+        if platform == 'android':
+            from android.permissions import request_permissions, Permission
+            request_permissions([Permission.MANAGE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE])
+
+    def apply_font_safe(self, dt):
+        f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
+        if os.path.exists(f_p):
+            try:
+                # 폰트 등록
+                LabelBase.register(name="korean", fn_regular=f_p)
+                # 모든 폰트 적용 대상에 동적 입히기
+                for screen in self.root.screens:
+                    self.recursive_font_apply(screen)
+                write_blackbox("Font Applied Successfully")
+            except Exception as e:
+                write_blackbox(f"Font Apply Delayed/Failed: {e}")
+
+    def recursive_font_apply(self, widget):
+        if hasattr(widget, 'font_name'):
+            widget.font_name = "korean"
+        if hasattr(widget, 'children'):
+            for child in widget.children:
+                self.recursive_font_apply(child)
 
 if __name__ == "__main__":
     PristonApp().run()
