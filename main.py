@@ -1,7 +1,7 @@
 import os, sys, traceback, json
 from datetime import datetime
 
-# [예방 1]: 핵심 모듈 선제 고정 (NameError 차단)
+# [예방 1]: 핵심 모듈 선제 고정 (NameError 박멸)
 from kivy.app import App
 from kivy.lang import Builder
 from kivy.clock import Clock
@@ -17,9 +17,9 @@ from kivy.uix.popup import Popup
 from kivy.graphics import Rectangle, Color
 from kivy.utils import platform
 
-# [환경 설정 및 블랙박스]
+# [환경 설정 및 블랙박스 도입]
 DOWNLOAD_PATH = "/storage/emulated/0/Download/"
-DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v106.json")
+DATA_FILE = os.path.join(DOWNLOAD_PATH, "PT_Data_v107.json")
 BLACKBOX_LOG = os.path.join(DOWNLOAD_PATH, "PT_BlackBox.txt")
 
 def write_blackbox(msg):
@@ -29,10 +29,18 @@ def write_blackbox(msg):
             f.write(f"[{ts}] {msg}\n")
     except: pass
 
-# [강제 생존]: 시스템 예외 훅
+# [강제 생존]: 시스템 예외 훅 표준화
 sys.excepthook = lambda t, v, tb: write_blackbox("".join(traceback.format_exception(t, v, tb)))
 
-# [예방 2]: 자가 치유 베이스 스크린
+# [물리 봉쇄]: 앱 시작 전 폰트 강제 등록 (IndexError 원천 차단)
+try:
+    font_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
+    if os.path.exists(font_p):
+        LabelBase.register(name="korean", fn_regular=font_p)
+        write_blackbox("Pre-Init Font Registration Success")
+except Exception as e: write_blackbox(f"Pre-Init Font Error: {e}")
+
+# [예방 2]: 자가 치유 베이스 스크린 (AttributeError 예방)
 class BaseScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -49,7 +57,7 @@ class BaseScreen(Screen):
                     Color(0.05, 0.1, 0.2, 1); Rectangle(pos=self.pos, size=self.size)
         except: pass
 
-# [세부 목록]: 18종 정보 + 11종 장비 필드
+# [세부 목록]: 18종 정보 + 11종 장비 필드 전수 수복
 INFO_KEYS = ['이름','직위','클랜','레벨','생명력','기력','근력','힘','정신력','재능','민첩','건강','명중','공격','방어','흡수','속도','비고']
 EQUIP_KEYS = ['한손무기','두손무기','갑옷','방패','장갑','부츠','암릿','링1','링2','아뮬랫','기타']
 
@@ -141,13 +149,13 @@ class InventoryScreen(DataEntryScreen): keys = ['아이템 목록/수량']; data
 class PhotoScreen(DataEntryScreen): keys = ['사진 메모/설명']; data_type = "photo"
 class StorageScreen(DataEntryScreen): keys = ['보관소 위치/내용']; data_type = "storage"
 
-# [예방 1-KV]: ParserException 수복 및 물리 봉쇄 스타일 각인
+# [예방 1-KV]: Parser 무결성 및 고정 폰트 선언
 KV = '''
 #:import FadeTransition kivy.uix.screenmanager.FadeTransition
 #:import Clock kivy.clock.Clock
 
 <Label>, <Button>, <TextInput>:
-    font_name: 'korean' if app.font_loaded else 'Roboto'
+    font_name: 'korean' if app.font_exists else 'Roboto'
 
 <MainScreen>:
     BoxLayout:
@@ -155,7 +163,7 @@ KV = '''
         padding: 10
         spacing: 10
         Label:
-            text: "PT Manager v106 [Standard]"
+            text: "PT Manager v107 [Absolute]"
             size_hint_y: 0.1
         TextInput:
             hint_text: "계정 검색..."
@@ -261,14 +269,14 @@ ScreenManager:
 class PristonApp(App):
     user_data = {"accounts": {}}
     cur_acc = ""; cur_slot = ""
-    font_loaded = False 
+    font_exists = os.path.exists(os.path.join(DOWNLOAD_PATH, "font.ttf"))
 
     def build(self):
         self.load_data()
         return Builder.load_string(KV)
 
     def load_data(self):
-        # [예방 3]: 데이터 강제 생존
+        # [예방 3]: 데이터 강제 생존 자동 생성
         try:
             if os.path.exists(DATA_FILE):
                 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -283,7 +291,6 @@ class PristonApp(App):
         except Exception as e: write_blackbox(f"Save Failure: {e}")
 
     def on_start(self):
-        Clock.schedule_once(self.load_font_atomic, 1.0)
         if platform == 'android':
             try:
                 from android.permissions import request_permissions
@@ -291,15 +298,6 @@ class PristonApp(App):
                                     'android.permission.WRITE_EXTERNAL_STORAGE',
                                     'android.permission.MANAGE_EXTERNAL_STORAGE'])
             except: pass
-
-    def load_font_atomic(self, dt):
-        f_p = os.path.join(DOWNLOAD_PATH, "font.ttf")
-        if os.path.exists(f_p):
-            try:
-                LabelBase.register(name="korean", fn_regular=f_p)
-                self.font_loaded = True 
-                write_blackbox("Font Load Success")
-            except Exception as e: write_blackbox(f"Font Error: {e}")
 
 if __name__ == "__main__":
     PristonApp().run()
