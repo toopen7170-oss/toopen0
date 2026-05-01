@@ -1,7 +1,7 @@
 import os, sys, traceback, time
 from datetime import datetime
 
-# [1. 블랙박스 & 사전 방역 엔진]
+# [1. 블랙박스 & 시퀀스 보안 엔진]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
@@ -24,11 +24,11 @@ def write_blackbox(msg):
 
 def global_crash_handler(exctype, value, tb):
     err_msg = "".join(traceback.format_exception(exctype, value, tb))
-    write_blackbox(f"!!! 방역 엔진 작동: 예상치 못한 충돌 감지 및 기록 !!!\n{err_msg}")
+    write_blackbox(f"!!! 시스템 시퀀스 보호 발동: 오류 기록 !!!\n{err_msg}")
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = global_crash_handler
-write_blackbox("방역 통합본 시동: 네임스페이스 및 속성 오류 사전 차단 모드 가동")
+write_blackbox("시퀀스 안정화본 시동: 클럭 충돌 방지 및 자가 수복 모드 가동")
 
 # [2. 환경 설정 및 전문 모듈 로드]
 try:
@@ -44,27 +44,25 @@ try:
 except Exception as e:
     write_blackbox(f"모듈 로드 치명적 오류: {str(e)}")
 
-# 갤럭시 S26 울트라 최적화: 검은 화면 및 소프트 키보드 대응
+# 갤럭시 S26 울트라 디스플레이 최적화
 Window.clearcolor = (0, 0, 0, 1)
 Window.softinput_mode = "below_target"
 
-# [3. 사전 방역: 리소스 상태 확정]
+# [3. 사전 리소스 로드: 엔진부 고정]
 FONT_EXISTS = False
 FONT_PATH = "/storage/emulated/0/Download/font.ttf"
 if os.path.exists(FONT_PATH):
     try:
         LabelBase.register(name="Korean", fn_regular=FONT_PATH)
         FONT_EXISTS = True
-        write_blackbox("방역 완료: 한글 폰트 엔진 결합 성공")
+        write_blackbox("시퀀스 확인: 폰트 엔진 초기화 성공")
     except:
-        write_blackbox("방역 경고: 폰트 파일 손상됨 (시스템 기본값 사용)")
+        write_blackbox("시퀀스 경고: 폰트 등록 실패 (기본값 전환)")
 
-# [4. UI 설계도(KV): 사전 방역 시스템 적용]
-# NameError 방지를 위해 모든 라이브러리를 최상단에 사전 각인
+# [4. UI 설계도(KV): 네임스페이스 및 속성 오류 사전 차단]
 KV = """
 #:import os os
 #:import LabelBase kivy.core.text.LabelBase
-#:import FadeTransition kivy.uix.screenmanager.FadeTransition
 
 <BaseButton@Button>:
     font_name: 'Korean' if app.is_font_ready else None
@@ -109,15 +107,10 @@ KV = """
             font_size: '32sp'
             size_hint_y: 0.3
         BaseButton:
-            text: '관리 시작 (사전 방역 모드)'
+            text: '관리 시작'
             on_release: root.go_detail()
 
 <DetailMenuScreen>:
-    canvas.before:
-        Rectangle:
-            pos: self.pos
-            size: self.size
-            source: 'bg.png' if os.path.exists('bg.png') else ''
     BoxLayout:
         orientation: 'vertical'
         padding: '25dp'
@@ -134,7 +127,6 @@ KV = """
             on_release: root.nav('equip')
         BaseButton:
             text: '뒤로가기'
-            background_color: (0.6, 0.2, 0.2, 0.8)
             on_release: app.root.current = 'main'
 
 <InfoScreen>:
@@ -170,23 +162,7 @@ KV = """
             on_release: app.root.current = 'detail_menu'
 """
 
-# [5. 안드로이드 전문가 권한 요청]
-def delayed_permission_check(dt):
-    if platform == 'android':
-        try:
-            from android.permissions import request_permissions, Permission
-            perms = [
-                Permission.READ_MEDIA_IMAGES,
-                Permission.CAMERA,
-                Permission.READ_EXTERNAL_STORAGE,
-                Permission.WRITE_EXTERNAL_STORAGE
-            ]
-            request_permissions(perms)
-            write_blackbox("방역 확인: 안드로이드 14 보안 권한 사출 성공")
-        except Exception as e:
-            write_blackbox(f"방역 경고: 권한 사출 실패 {str(e)}")
-
-# [6. 기능 로직부: 사전 방역 데이터 바인딩]
+# [5. 기능 로직부: 전수 검증 및 시퀀스 수복]
 class MainScreen(Screen):
     def go_detail(self):
         app.root.get_screen('detail_menu').char_name = "점주님 계정"
@@ -198,7 +174,6 @@ class DetailMenuScreen(Screen):
 
 class InfoScreen(Screen):
     def on_pre_enter(self):
-        # AttributeError 방지를 위한 사전 위젯 존재 확인
         if not hasattr(self.ids, 'container'): return
         self.ids.container.clear_widgets()
         f = ["이름", "클랜", "레벨", "힘", "정신", "재능", "민첩", "건강", "생명력", "기력", "근력", "공격", "방어", "명중", "흡수", "속도", "직위", "기타"]
@@ -224,30 +199,40 @@ class EquipScreen(Screen):
             self.ids.container.add_widget(row)
 
 class PristonTaleApp(App):
-    # AttributeError 방지를 위한 '안전한 대화 통로' (Property) 사전 구축
     is_font_ready = BooleanProperty(FONT_EXISTS)
 
     def build(self):
-        # 1. 시동 2초 후 권한 요청 (보안 튕김 방지)
-        Clock.schedule_once(delayed_permission_check, 2.0)
-        
-        # 2. 설계도 로드 (이중 예외 처리로 튕김 방지)
         try:
             Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"방역 경고: 설계도 로드 오류 {str(e)}")
+            write_blackbox(f"설계도 로드 오류: {str(e)}")
         
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MainScreen(name='main'))
         sm.add_widget(DetailMenuScreen(name='detail_menu'))
         sm.add_widget(InfoScreen(name='info'))
         sm.add_widget(EquipScreen(name='equip'))
-        
-        write_blackbox("방역 완료: 시스템이 무결점 상태로 기동되었습니다.")
         return sm
+
+    # [핵심 수복] 앱이 화면에 완전히 나타난 후 시퀀스 실행
+    def on_start(self):
+        Clock.schedule_once(self.delayed_init, 0.5)
+
+    def delayed_init(self, dt):
+        write_blackbox("시퀀스 확인: 화면 안착 후 초기화 작업 시작")
+        if platform == 'android':
+            try:
+                from android.permissions import request_permissions, Permission
+                perms = [Permission.READ_MEDIA_IMAGES, Permission.CAMERA, 
+                         Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
+                request_permissions(perms)
+                write_blackbox("시퀀스 확인: 안드로이드 14 보안 권한 요청 사출")
+            except Exception as e:
+                write_blackbox(f"시퀀스 오류: 권한 요청 실패 {str(e)}")
 
 if __name__ == '__main__':
     try:
         PristonTaleApp().run()
     except Exception:
-        write_blackbox(f"치명적 오류 분석:\n{traceback.format_exc()}")
+        # 이 시점에서 발생하는 Clock 오류까지 잡아내기 위한 최종 보루
+        write_blackbox(f"최종 기동 단계 붕괴:\n{traceback.format_exc()}")
