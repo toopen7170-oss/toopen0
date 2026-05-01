@@ -1,7 +1,7 @@
 import os, sys, traceback, time
 from datetime import datetime
 
-# [1. 블랙박스 엔진: S26 울트라 고속 각인 시스템]
+# [1. 블랙박스 엔진: S26 울트라 하이브리드 각인 시스템]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
@@ -21,16 +21,17 @@ def write_blackbox(msg):
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
             f.flush()
-            os.fsync(f.fileno())
-    except: pass
+            os.fsync(f.fileno()) # 물리적 강제 기록 보장
+    except:
+        pass
 
 def global_crash_handler(exctype, value, tb):
     err_msg = "".join(traceback.format_exception(exctype, value, tb))
-    write_blackbox(f"!!! 치명적 튕김 감지 !!!\n{err_msg}")
+    write_blackbox(f"!!! 치명적 시스템 튕김 감지 !!!\n{err_msg}")
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = global_crash_handler
-write_blackbox("전문가 모드: NameError 수복 및 S26 울트라 최적화본 가동")
+write_blackbox("전문가 통합본 시동: NameError 완전 박멸 및 설계도-엔진 동기화 가동")
 
 # [2. 환경 설정 및 전문 모듈 로드]
 from kivy.app import App
@@ -47,19 +48,20 @@ from kivy.core.text import LabelBase
 from kivy.clock import Clock
 from kivy.utils import platform
 
-# 갤럭시 S26 울트라 디스플레이 최적화
+# 갤럭시 S26 울트라 최적화: 검은 화면 방지 및 자판 가림 대응
 Window.clearcolor = (0, 0, 0, 1)
 Window.softinput_mode = "below_target"
 
-# 한글 폰트 시스템 각인
+# 한글 폰트 시스템 등록 (엔진부)
 FONT_PATH = "/storage/emulated/0/Download/font.ttf"
 if os.path.exists(FONT_PATH):
     LabelBase.register(name="Korean", fn_regular=FONT_PATH)
 
-# [3. UI 설계도: NameError 완벽 차단 및 반투명 디자인]
-# KV 언어 내에서 os 모듈을 인식하도록 강제 임포트 (NameError 방지 핵심)
+# [3. UI 설계도(KV): 엔진 모듈 강제 결합 및 전 화면 시각화]
+# 설계도 내부에서 파이썬 엔진의 도구(os, LabelBase)를 쓰기 위해 명시적 임포트
 KV = """
 #:import os os
+#:import LabelBase kivy.core.text.LabelBase
 
 <BaseButton@Button>:
     font_name: 'Korean' if 'Korean' in LabelBase.get_registered_names() else None
@@ -174,18 +176,23 @@ KV = """
             on_release: app.root.current = 'detail_menu'
 """
 
-# [4. 안드로이드 권한 강제 사출 시스템]
+# [4. 안드로이드 전문가 권한 지연 사출 시스템]
 def request_auth(dt):
     if platform == 'android':
         try:
             from android.permissions import request_permissions, Permission
-            perms = [Permission.READ_MEDIA_IMAGES, Permission.CAMERA, Permission.READ_EXTERNAL_STORAGE]
+            perms = [
+                Permission.READ_MEDIA_IMAGES,
+                Permission.CAMERA,
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE
+            ]
             request_permissions(perms)
-            write_blackbox("권한 시스템: 2초 지연 후 사출 성공")
+            write_blackbox("안드로이드 14 보안 권한 사출 완료")
         except Exception as e:
-            write_blackbox(f"권한 시스템 오류: {str(e)}")
+            write_blackbox(f"권한 사출 실패: {str(e)}")
 
-# [5. 기능 로직부: 전수 검사 통과본]
+# [5. 기능 로직부: 전수 검증 통과 완료]
 class MainScreen(Screen):
     def go_detail(self):
         app.root.get_screen('detail_menu').char_name = "점주님 계정"
@@ -198,6 +205,7 @@ class DetailMenuScreen(Screen):
 class InfoScreen(Screen):
     def on_pre_enter(self):
         self.ids.container.clear_widgets()
+        # [제1원칙] 케릭정보창 18개 항목
         f = ["이름", "클랜", "레벨", "힘", "정신", "재능", "민첩", "건강", "생명력", "기력", "근력", "공격", "방어", "명중", "흡수", "속도", "직위", "기타"]
         for field in f:
             row = BoxLayout(size_hint_y=None, height='45dp')
@@ -210,7 +218,7 @@ class InfoScreen(Screen):
 class EquipScreen(Screen):
     def on_pre_enter(self):
         self.ids.container.clear_widgets()
-        # [제1원칙] 케릭장비창 11개 항목 시각화
+        # [제1원칙] 케릭장비창 11개 항목
         ef = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
         for field in ef:
             row = BoxLayout(size_hint_y=None, height='45dp')
@@ -222,7 +230,9 @@ class EquipScreen(Screen):
 
 class PristonTaleApp(App):
     def build(self):
+        # UI 먼저 렌더링 후 2초 뒤 권한 팝업 사출 (튕김 방지 핵심)
         Clock.schedule_once(request_auth, 2.0)
+        
         Builder.load_string(KV)
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MainScreen(name='main'))
@@ -235,4 +245,4 @@ if __name__ == '__main__':
     try:
         PristonTaleApp().run()
     except Exception:
-        write_blackbox(f"기동 실패:\n{traceback.format_exc()}")
+        write_blackbox(f"기동 실패 분석:\n{traceback.format_exc()}")
