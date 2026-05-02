@@ -1,88 +1,56 @@
-import os, sys, traceback, time
+import os, sys, traceback
 from datetime import datetime
 
-# [1. 블랙박스 & 렌더링 보안 엔진]
-def get_download_path():
-    path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
+# [1. 블랙박스 및 엔진 보호막]
+def write_log(msg):
+    path = "/storage/emulated/0/Download/PristonTale_Log.txt"
     try:
-        base_dir = os.path.dirname(path)
-        if not os.path.exists(base_dir): return "PristonTale_BlackBox.txt"
-        with open(path, "a", encoding="utf-8") as f: pass
-        return path
-    except: return "PristonTale_BlackBox.txt"
-
-LOG_FILE = get_download_path()
-
-def write_blackbox(msg):
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n[{timestamp}] {msg}\n{'-'*60}\n")
-            f.flush()
-            os.fsync(f.fileno())
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now()}] {msg}\n")
     except: pass
 
-def global_crash_handler(exctype, value, tb):
-    err_msg = "".join(traceback.format_exception(exctype, value, tb))
-    write_blackbox(f"!!! 렌더링/시퀀스 통합 보호 발동 !!!\n{err_msg}")
+def crash_guard(exctype, value, tb):
+    write_log(f"!!! 비상 방역 시스템 가동 (튕김 감지) !!!\n{''.join(traceback.format_exception(exctype, value, tb))}")
     sys.__excepthook__(exctype, value, tb)
 
-sys.excepthook = global_crash_handler
-write_blackbox("기본원칙 수복본 시동: 18개 정보/11개 장비창 및 방역 로직 통합")
+sys.excepthook = crash_guard
 
-# [2. 환경 설정 및 전문 모듈 로드]
+# [2. Kivy 엔진 선제 최적화]
+os.environ['KIVY_NO_ARGS'] = '1' # 인자 충돌 방지
 try:
     from kivy.app import App
     from kivy.lang import Builder
     from kivy.uix.screenmanager import ScreenManager, Screen, FadeTransition
     from kivy.core.window import Window
-    from kivy.properties import StringProperty, BooleanProperty
+    from kivy.properties import BooleanProperty, StringProperty
     from kivy.uix.boxlayout import BoxLayout
     from kivy.core.text import LabelBase
     from kivy.clock import Clock
     from kivy.utils import platform
 except Exception as e:
-    write_blackbox(f"모듈 로드 치명적 오류: {str(e)}")
+    write_log(f"모듈 로드 단계 사전 차단: {e}")
 
+# S26 울트라 고주사율 대응 및 렌더링 고정
 Window.clearcolor = (0, 0, 0, 1)
-Window.softinput_mode = "below_target"
 
-# [3. 폰트 엔진 자가 치유 각인]
+# [3. 폰트 엔진 절대 안전 모드]
+FONT_NAME = "Korean"
 FONT_READY = False
-FONT_PATH = "/storage/emulated/0/Download/font.ttf"
-if os.path.exists(FONT_PATH):
+if os.path.exists("/storage/emulated/0/Download/font.ttf"):
     try:
-        LabelBase.register(name="Korean", fn_regular=FONT_PATH)
+        LabelBase.register(name=FONT_NAME, fn_regular="/storage/emulated/0/Download/font.ttf")
         FONT_READY = True
-        write_blackbox("수복 확인: 폰트 엔진 각인 완료")
-    except:
-        write_blackbox("수복 경고: 폰트 각인 실패(기본값 사용)")
+    except: write_log("폰트 등록 오류: 기본 폰트로 우회")
 
-# [4. UI 설계도(KV): 기본 토대 100% 복구 및 방역 적용]
+# [4. UI 설계도: 렌더링 부하 분산 구조]
 KV = """
-#:import os os
-
 <BaseButton@Button>:
     font_name: 'Korean' if app.is_font_ready else None
     font_size: '18sp'
     background_normal: ''
-    background_color: (0.18, 0.49, 0.2, 0.8)
+    background_color: (0.1, 0.4, 0.2, 0.8)
     size_hint_y: None
     height: '50dp'
-
-<MenuLabel@Label>:
-    font_name: 'Korean' if app.is_font_ready else None
-    font_size: '15sp'
-    halign: 'center'
-    valign: 'middle'
-    text_size: self.size
-
-<CustomInput@TextInput>:
-    font_name: 'Korean' if app.is_font_ready else None
-    multiline: False
-    background_color: (1, 1, 1, 0.12)
-    foreground_color: (1, 1, 1, 1)
-    padding_y: [self.height / 2.0 - (self.line_height / 2.0), 0]
 
 <MainScreen>:
     canvas.before:
@@ -98,52 +66,41 @@ KV = """
     BoxLayout:
         orientation: 'vertical'
         padding: '20dp'
-        spacing: '20dp'
         Label:
             text: 'PristonTale Manager'
             font_name: 'Korean' if app.is_font_ready else None
-            font_size: '32sp'
-            size_hint_y: 0.3
+            font_size: '30sp'
+            size_hint_y: 0.4
         BaseButton:
             text: '관리 시작'
-            on_release: root.go_detail()
+            on_release: app.root.current = 'detail_menu'
 
 <DetailMenuScreen>:
-    canvas.before:
-        Rectangle:
-            pos: self.pos
-            size: self.size
-            source: 'bg.png' if os.path.exists('bg.png') else ''
     BoxLayout:
         orientation: 'vertical'
-        padding: '25dp'
-        spacing: '15dp'
-        Label:
-            text: root.char_name + ' 관리'
-            font_name: 'Korean' if app.is_font_ready else None
-            size_hint_y: 0.1
+        padding: '20dp'
+        spacing: '10dp'
         BaseButton:
-            text: '케릭정보창'
-            on_release: root.nav('info')
+            text: '케릭정보창 (18)'
+            on_release: app.root.current = 'info'
         BaseButton:
-            text: '케릭장비창'
-            on_release: root.nav('equip')
+            text: '케릭장비창 (11)'
+            on_release: app.root.current = 'equip'
         BaseButton:
-            text: '뒤로가기'
+            text: '메인으로'
             on_release: app.root.current = 'main'
 
 <InfoScreen>:
     BoxLayout:
         orientation: 'vertical'
         ScrollView:
-            id: scroll_v
             BoxLayout:
                 id: container
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
+                spacing: '5dp'
                 padding: '10dp'
-                spacing: '10dp'
         BaseButton:
             text: '뒤로가기'
             on_release: app.root.current = 'detail_menu'
@@ -152,66 +109,56 @@ KV = """
     BoxLayout:
         orientation: 'vertical'
         ScrollView:
-            id: scroll_v
             BoxLayout:
                 id: container
                 orientation: 'vertical'
                 size_hint_y: None
                 height: self.minimum_height
+                spacing: '5dp'
                 padding: '10dp'
-                spacing: '10dp'
         BaseButton:
             text: '뒤로가기'
             on_release: app.root.current = 'detail_menu'
 """
 
-# [5. 기능 로직부: 18개/11개 원칙 및 시퀀스 보호]
-class MainScreen(Screen):
-    def go_detail(self):
-        app.root.get_screen('detail_menu').char_name = "점주님 계정"
-        app.root.current = 'detail_menu'
-
-class DetailMenuScreen(Screen):
-    char_name = StringProperty("")
-    def nav(self, target): app.root.current = target
-
+# [5. 기능 로직: 순차적 위젯 사출 (사전 방역 핵심)]
 class InfoScreen(Screen):
-    def on_pre_enter(self):
-        if not hasattr(self.ids, 'container'): return
+    def on_enter(self): # 화면이 완전히 뜬 후 실행
         self.ids.container.clear_widgets()
-        # [제1원칙] 18개 정보 항목
-        f = ["이름", "클랜", "레벨", "힘", "정신", "재능", "민첩", "건강", "생명력", "기력", "근력", "공격", "방어", "명중", "흡수", "속도", "직위", "기타"]
-        for field in f:
-            row = BoxLayout(size_hint_y=None, height='45dp')
-            row.add_widget(MenuLabel(text=field, size_hint_x=0.3))
-            ti = CustomInput(hint_text=f"{field} 입력")
-            ti.bind(focus=lambda ins, val: Clock.schedule_once(lambda dt: self.ids.scroll_v.scroll_to(ins), 0.2) if val else None)
-            row.add_widget(ti)
-            self.ids.container.add_widget(row)
+        fields = ["이름", "클랜", "레벨", "힘", "정신", "재능", "민첩", "건강", "생명력", "기력", "근력", "공격", "방어", "명중", "흡수", "속도", "직위", "기타"]
+        for i, f in enumerate(fields):
+            Clock.schedule_once(lambda dt, name=f: self.add_row(name), i * 0.03)
+
+    def add_row(self, name):
+        row = BoxLayout(size_hint_y=None, height='40dp')
+        from kivy.uix.label import Label
+        from kivy.uix.textinput import TextInput
+        row.add_widget(Label(text=name, font_name='Korean' if App.get_running_app().is_font_ready else None, size_hint_x=0.3))
+        row.add_widget(TextInput(multiline=False))
+        self.ids.container.add_widget(row)
 
 class EquipScreen(Screen):
-    def on_pre_enter(self):
-        if not hasattr(self.ids, 'container'): return
+    def on_enter(self):
         self.ids.container.clear_widgets()
-        # [제1원칙] 11개 장비 항목
-        ef = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
-        for field in ef:
-            row = BoxLayout(size_hint_y=None, height='45dp')
-            row.add_widget(MenuLabel(text=field, size_hint_x=0.3))
-            ti = CustomInput(hint_text=f"{field} 정보")
-            ti.bind(focus=lambda ins, val: Clock.schedule_once(lambda dt: self.ids.scroll_v.scroll_to(ins), 0.2) if val else None)
-            row.add_widget(ti)
-            self.ids.container.add_widget(row)
+        fields = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
+        for i, f in enumerate(fields):
+            Clock.schedule_once(lambda dt, name=f: self.add_row(name), i * 0.03)
+
+    def add_row(self, name):
+        row = BoxLayout(size_hint_y=None, height='40dp')
+        from kivy.uix.label import Label
+        from kivy.uix.textinput import TextInput
+        row.add_widget(Label(text=name, font_name='Korean' if App.get_running_app().is_font_ready else None, size_hint_x=0.3))
+        row.add_widget(TextInput(multiline=False))
+        self.ids.container.add_widget(row)
+
+class MainScreen(Screen): pass
+class DetailMenuScreen(Screen): pass
 
 class PristonTaleApp(App):
     is_font_ready = BooleanProperty(FONT_READY)
-
     def build(self):
-        try:
-            Builder.load_string(KV)
-        except Exception as e:
-            write_blackbox(f"설계도 빌드 오류: {str(e)}")
-        
+        Builder.load_string(KV)
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MainScreen(name='main'))
         sm.add_widget(DetailMenuScreen(name='detail_menu'))
@@ -219,21 +166,5 @@ class PristonTaleApp(App):
         sm.add_widget(EquipScreen(name='equip'))
         return sm
 
-    def on_start(self):
-        # 화면 안착 후 0.5초 뒤 권한 요청 (시퀀스 충돌 방지)
-        Clock.schedule_once(self.delayed_init, 0.5)
-
-    def delayed_init(self, dt):
-        if platform == 'android':
-            try:
-                from android.permissions import request_permissions, Permission
-                perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
-                request_permissions(perms)
-                write_blackbox("수복 확인: 안드로이드 권한 시퀀스 통과")
-            except: pass
-
 if __name__ == '__main__':
-    try:
-        PristonTaleApp().run()
-    except Exception:
-        write_blackbox(f"최종 기동 붕괴 분석:\n{traceback.format_exc()}")
+    PristonTaleApp().run()
