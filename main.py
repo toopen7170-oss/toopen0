@@ -1,7 +1,7 @@
 import os, sys, traceback, time
 from datetime import datetime
 
-# [1. 블랙박스 & 시퀀스 보안 엔진]
+# [1. 블랙박스 & 렌더링 보안 엔진]
 def get_download_path():
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
@@ -24,11 +24,11 @@ def write_blackbox(msg):
 
 def global_crash_handler(exctype, value, tb):
     err_msg = "".join(traceback.format_exception(exctype, value, tb))
-    write_blackbox(f"!!! 시스템 시퀀스 보호 발동: 오류 기록 !!!\n{err_msg}")
+    write_blackbox(f"!!! 렌더링/시퀀스 통합 보호 발동 !!!\n{err_msg}")
     sys.__excepthook__(exctype, value, tb)
 
 sys.excepthook = global_crash_handler
-write_blackbox("시퀀스 안정화본 시동: 클럭 충돌 방지 및 자가 수복 모드 가동")
+write_blackbox("기본원칙 수복본 시동: 18개 정보/11개 장비창 및 방역 로직 통합")
 
 # [2. 환경 설정 및 전문 모듈 로드]
 try:
@@ -44,25 +44,23 @@ try:
 except Exception as e:
     write_blackbox(f"모듈 로드 치명적 오류: {str(e)}")
 
-# 갤럭시 S26 울트라 디스플레이 최적화
 Window.clearcolor = (0, 0, 0, 1)
 Window.softinput_mode = "below_target"
 
-# [3. 사전 리소스 로드: 엔진부 고정]
-FONT_EXISTS = False
+# [3. 폰트 엔진 자가 치유 각인]
+FONT_READY = False
 FONT_PATH = "/storage/emulated/0/Download/font.ttf"
 if os.path.exists(FONT_PATH):
     try:
         LabelBase.register(name="Korean", fn_regular=FONT_PATH)
-        FONT_EXISTS = True
-        write_blackbox("시퀀스 확인: 폰트 엔진 초기화 성공")
+        FONT_READY = True
+        write_blackbox("수복 확인: 폰트 엔진 각인 완료")
     except:
-        write_blackbox("시퀀스 경고: 폰트 등록 실패 (기본값 전환)")
+        write_blackbox("수복 경고: 폰트 각인 실패(기본값 사용)")
 
-# [4. UI 설계도(KV): 네임스페이스 및 속성 오류 사전 차단]
+# [4. UI 설계도(KV): 기본 토대 100% 복구 및 방역 적용]
 KV = """
 #:import os os
-#:import LabelBase kivy.core.text.LabelBase
 
 <BaseButton@Button>:
     font_name: 'Korean' if app.is_font_ready else None
@@ -111,6 +109,11 @@ KV = """
             on_release: root.go_detail()
 
 <DetailMenuScreen>:
+    canvas.before:
+        Rectangle:
+            pos: self.pos
+            size: self.size
+            source: 'bg.png' if os.path.exists('bg.png') else ''
     BoxLayout:
         orientation: 'vertical'
         padding: '25dp'
@@ -162,7 +165,7 @@ KV = """
             on_release: app.root.current = 'detail_menu'
 """
 
-# [5. 기능 로직부: 전수 검증 및 시퀀스 수복]
+# [5. 기능 로직부: 18개/11개 원칙 및 시퀀스 보호]
 class MainScreen(Screen):
     def go_detail(self):
         app.root.get_screen('detail_menu').char_name = "점주님 계정"
@@ -176,6 +179,7 @@ class InfoScreen(Screen):
     def on_pre_enter(self):
         if not hasattr(self.ids, 'container'): return
         self.ids.container.clear_widgets()
+        # [제1원칙] 18개 정보 항목
         f = ["이름", "클랜", "레벨", "힘", "정신", "재능", "민첩", "건강", "생명력", "기력", "근력", "공격", "방어", "명중", "흡수", "속도", "직위", "기타"]
         for field in f:
             row = BoxLayout(size_hint_y=None, height='45dp')
@@ -189,6 +193,7 @@ class EquipScreen(Screen):
     def on_pre_enter(self):
         if not hasattr(self.ids, 'container'): return
         self.ids.container.clear_widgets()
+        # [제1원칙] 11개 장비 항목
         ef = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타"]
         for field in ef:
             row = BoxLayout(size_hint_y=None, height='45dp')
@@ -199,13 +204,13 @@ class EquipScreen(Screen):
             self.ids.container.add_widget(row)
 
 class PristonTaleApp(App):
-    is_font_ready = BooleanProperty(FONT_EXISTS)
+    is_font_ready = BooleanProperty(FONT_READY)
 
     def build(self):
         try:
             Builder.load_string(KV)
         except Exception as e:
-            write_blackbox(f"설계도 로드 오류: {str(e)}")
+            write_blackbox(f"설계도 빌드 오류: {str(e)}")
         
         sm = ScreenManager(transition=FadeTransition())
         sm.add_widget(MainScreen(name='main'))
@@ -214,25 +219,21 @@ class PristonTaleApp(App):
         sm.add_widget(EquipScreen(name='equip'))
         return sm
 
-    # [핵심 수복] 앱이 화면에 완전히 나타난 후 시퀀스 실행
     def on_start(self):
+        # 화면 안착 후 0.5초 뒤 권한 요청 (시퀀스 충돌 방지)
         Clock.schedule_once(self.delayed_init, 0.5)
 
     def delayed_init(self, dt):
-        write_blackbox("시퀀스 확인: 화면 안착 후 초기화 작업 시작")
         if platform == 'android':
             try:
                 from android.permissions import request_permissions, Permission
-                perms = [Permission.READ_MEDIA_IMAGES, Permission.CAMERA, 
-                         Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
+                perms = [Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE]
                 request_permissions(perms)
-                write_blackbox("시퀀스 확인: 안드로이드 14 보안 권한 요청 사출")
-            except Exception as e:
-                write_blackbox(f"시퀀스 오류: 권한 요청 실패 {str(e)}")
+                write_blackbox("수복 확인: 안드로이드 권한 시퀀스 통과")
+            except: pass
 
 if __name__ == '__main__':
     try:
         PristonTaleApp().run()
     except Exception:
-        # 이 시점에서 발생하는 Clock 오류까지 잡아내기 위한 최종 보루
-        write_blackbox(f"최종 기동 단계 붕괴:\n{traceback.format_exc()}")
+        write_blackbox(f"최종 기동 붕괴 분석:\n{traceback.format_exc()}")
