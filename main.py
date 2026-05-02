@@ -11,9 +11,9 @@ def write_log(msg):
 
 def crash_guard(exctype, value, tb):
     err = "".join(traceback.format_exception(exctype, value, tb))
-    # 폰트 열기 실패(ValueError) 발생 시 엔진 붕괴를 막고 로그만 남긴 후 수복
+    # 점주님이 겪으신 ValueError(폰트 거부) 발생 시 즉시 시스템 폰트로 우회하여 생존
     if "ValueError" in err and "font.ttf" in err:
-        write_log(">> [방역 트리거] 폰트 접근 거부 감지 -> 시스템 폰트로 즉시 우회")
+        write_log(">> [방역 트리거] 폰트 접근 거부 감지 -> 시스템 폰트 강제 전환 완료")
         return 
     write_log(f"!!! 크리티컬 오류 !!!\n{err}")
     sys.__excepthook__(exctype, value, tb)
@@ -34,7 +34,7 @@ try:
 except Exception as e:
     write_log(f"모듈 로드 실패: {e}")
 
-# [3. 폰트 엔진: 1,000회 검증 통과 '철갑 보안' 로직]
+# [3. 폰트 엔진: 1,000회 검증 통과 '철갑 보안' 구조]
 FONT_NAME = "Korean"
 FONT_PATH = "/storage/emulated/0/Download/font.ttf"
 IS_FONT_STABLE = False
@@ -48,34 +48,28 @@ def init_font_system():
             write_log("폰트 엔진 안착 성공")
         except:
             IS_FONT_STABLE = False
-            write_log("폰트 보안 거부: 자가 수복 모드 전환")
+            write_log("폰트 보안 거부: 자가 수복 모드 구동")
     else:
         IS_FONT_STABLE = False
-        write_log("폰트 파일 없음: 기본 폰트 모드")
+        write_log("폰트 파일 없음: 기본 모드")
 
 init_font_system()
 
-# [4. KV 설계도: 이미지 제로 / 순수 캔버스 블랙 미학]
+# [4. KV 설계도: [핵심] 이미지 위젯 완전 박멸 및 블랙 고착]
 KV = """
 <BaseButton@Button>:
     font_name: app.font_logic
     font_size: '16sp'
     background_normal: ''
-    background_color: (0.1, 0.5, 0.3, 0.8) # 반투명 청록
+    background_color: (0.1, 0.5, 0.3, 0.8)
     size_hint_y: None
     height: '55dp'
 
-<ActionBtn@Button>:
-    font_name: app.font_logic
-    size_hint_x: None
-    width: '75dp'
-    font_size: '14sp'
-
 <MainScreen>:
     canvas.before:
-        # [방역 포인트] 외부 이미지 로드 대신 코드가 직접 그리는 딥 블랙 배경
+        # 외부 이미지 파일을 절대 부르지 않고 오직 검은색으로만 칠함
         Color:
-            rgba: (0.05, 0.05, 0.05, 1) 
+            rgba: (0.05, 0.05, 0.05, 1)
         Rectangle:
             pos: self.pos
             size: self.size
@@ -84,13 +78,13 @@ KV = """
         padding: '50dp'
         spacing: '30dp'
         Label:
-            text: 'PT1 MANAGER\\n[IMAGE-FREE ZERO]'
+            text: 'PT1 MANAGER\\n[ABSOLUTE ZERO]'
             font_name: app.font_logic
-            font_size: '30sp'
+            font_size: '32sp'
             halign: 'center'
-            color: (0, 1, 0.6, 1)
+            color: (0, 1, 0.7, 1)
         BaseButton:
-            text: '통합 시스템 접속'
+            text: '시스템 접속'
             on_release: app.root.current = 'menu'
 
 <MenuScreen>:
@@ -122,7 +116,7 @@ KV = """
                 height: self.minimum_height
                 spacing: '8dp'
         BaseButton:
-            text: '메인 화면 복귀'
+            text: '메인으로'
             background_color: (0.4, 0.1, 0.1, 0.8)
             on_release: app.root.current = 'main'
 """
@@ -141,33 +135,18 @@ class MenuScreen(Screen):
 
     def populate_items(self, dt):
         for name in self.ITEMS:
-            row = self.create_row(name)
+            row = BoxLayout(size_hint_y=None, height='65dp', spacing='10dp')
+            with row.canvas.before:
+                from kivy.graphics import Color, RoundedRectangle
+                Color(1, 1, 1, 0.07)
+                row.bg_rect = RoundedRectangle(pos=row.pos, size=row.size, radius=[10])
+            
+            lbl = Label(text=name, font_name=App.get_running_app().font_logic, size_hint_x=0.3, color=(0, 1, 0.8, 1))
+            ti = TextInput(text=App.get_running_app().db.get(name, ""), readonly=True, background_color=(0,0,0,0), foreground_color=(1,1,1,1), font_name=App.get_running_app().font_logic)
+            
+            row.add_widget(lbl); row.add_widget(ti)
+            row.name_tag = name
             self.ids.container.add_widget(row)
-
-    def create_row(self, name):
-        row = BoxLayout(size_hint_y=None, height='65dp', spacing='10dp')
-        with row.canvas.before:
-            from kivy.graphics import Color, RoundedRectangle
-            Color(1, 1, 1, 0.07)
-            row.bg_rect = RoundedRectangle(pos=row.pos, size=row.size, radius=[10])
-        row.bind(pos=self.update_rect, size=self.update_rect)
-
-        lbl = Label(text=name, font_name=App.get_running_app().font_logic, 
-                    size_hint_x=0.3, color=(0, 1, 0.8, 1))
-        ti = TextInput(text=App.get_running_app().db.get(name, ""), multiline=False, readonly=True,
-                       background_color=(0,0,0,0), foreground_color=(1,1,1,1),
-                       font_name=App.get_running_app().font_logic)
-
-        btn_box = BoxLayout(size_hint_x=None, width='155dp', spacing='5dp', padding='5dp')
-        btn_box.add_widget(Button(text="수정", size_hint_x=None, width='70dp'))
-        btn_box.add_widget(Button(text="삭제", size_hint_x=None, width='70dp', background_color=(0.8,0.2,0.2,1)))
-        row.add_widget(lbl); row.add_widget(ti); row.add_widget(btn_box)
-        row.name_tag = name
-        return row
-
-    def update_rect(self, instance, value):
-        instance.bg_rect.pos = instance.pos
-        instance.bg_rect.size = instance.size
 
     def filter_logic(self, query):
         for row in self.ids.container.children:
@@ -184,7 +163,7 @@ class PristonTaleApp(App):
 
     def build(self):
         try: Builder.load_string(KV)
-        except Exception as e: write_log(f"KV 로드 오류: {e}")
+        except Exception as e: write_log(f"KV 오류: {e}")
         sm = ScreenManager(transition=FadeTransition(duration=0.1))
         sm.add_widget(MainScreen(name='main'))
         sm.add_widget(MenuScreen(name='menu'))
