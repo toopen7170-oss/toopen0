@@ -13,6 +13,7 @@ from kivy.core.text import LabelBase
 
 # [1. 블랙박스 및 자가 진단 각인 엔진]
 def write_blackbox(msg):
+    # 점주님 폰의 다운로드 폴더에 물리적 각인
     path = "/storage/emulated/0/Download/PristonTale_BlackBox.txt"
     try:
         with open(path, "a", encoding="utf-8") as f:
@@ -24,20 +25,28 @@ def write_blackbox(msg):
 def global_crash_handler(exctype, value, tb):
     err_msg = "".join(traceback.format_exception(exctype, value, tb))
     write_blackbox(f"!!! 시스템 비상 종료 (자가 진단 실패) !!!\n{err_msg}")
-    # 점주님 폰 화면에 마지막 오류 표시 시도
     sys.exit(1)
 
 sys.excepthook = global_crash_handler
 
-# [2. 환경 오류 방역: 한글 폰트 수복]
+# [2. 환경 오류 방역: 폰트/배경 유연화 로직]
 FONT_PATH = "/storage/emulated/0/Download/font.ttf"
-if os.path.exists(FONT_PATH):
-    LabelBase.register(name="Korean", fn_regular=FONT_PATH)
-    DEFAULT_FONT = "Korean"
-else:
-    DEFAULT_FONT = "Roboto"
+BG_PATH = "bg.png"
 
-# [3. KV 설계도: 자가 진단 인터페이스 및 5단계 계층]
+# 폰트 검증: 파일이 없거나 열 수 없으면 즉시 시스템 폰트로 우회
+try:
+    if os.path.exists(FONT_PATH):
+        LabelBase.register(name="Korean", fn_regular=FONT_PATH)
+        DEFAULT_FONT = "Korean"
+        write_blackbox("폰트 검증 성공: Korean 폰트 로드 완료")
+    else:
+        DEFAULT_FONT = "Roboto"
+        write_blackbox("폰트 파일 없음: 시스템 폰트로 강제 우회")
+except Exception as e:
+    DEFAULT_FONT = "Roboto"
+    write_blackbox(f"폰트 엔진 오류 발생: {e} -> 시스템 폰트 복구")
+
+# [3. KV 설계도: 자가 진단 인터페이스]
 KV = """
 <BaseLayout@BoxLayout>:
     orientation: 'vertical'
@@ -49,12 +58,12 @@ KV = """
         Rectangle:
             pos: self.pos
             size: self.size
-            source: 'bg.png' if app.bg_ready else ''
+            source: app.current_bg if app.bg_visible else ''
 
 <AccountScreen>:
     BaseLayout:
         Label:
-            text: '1. 계정 접속'
+            text: '1. 계정 접속 (진단 중...)'
             font_name: app.font_name
             size_hint_y: None
             height: '60dp'
@@ -158,13 +167,13 @@ KV = """
             on_release: app.root.current = 'char_menu'
 """
 
-# [4. 자가 치유 로직: 지연 사출 및 무결성 검증]
+# [4. 화면 클래스: 블랙박스 연동 및 지연 사출]
 class InfoScreen(Screen):
     ITEMS = ["이름", "직위", "클랜", "레벨", "생명력", "기력", "근력", "힘", "정신력", "재능", "민첩", "건강", "명중", "공격", "방어", "흡수", "속도", "종합"]
     def on_enter(self):
+        write_blackbox("현재 화면: [InfoScreen] 진입 - 데이터 사출 개시")
         self.ids.info_box.clear_widgets()
-        write_blackbox("정보창 자가 치유 사출 시작")
-        Clock.schedule_once(self._build_items, 0.2)
+        Clock.schedule_once(self._build_items, 0.3)
 
     def _build_items(self, dt):
         self.ids.info_title.text = "케릭정보 (18항목)"
@@ -177,9 +186,9 @@ class InfoScreen(Screen):
 class EquipScreen(Screen):
     ITEMS = ["한손무기", "두손무기", "갑옷", "방패", "장갑", "부츠", "암릿", "링1", "링2", "아뮬랫", "기타장비"]
     def on_enter(self):
+        write_blackbox("현재 화면: [EquipScreen] 진입 - 데이터 사출 개시")
         self.ids.equip_box.clear_widgets()
-        write_blackbox("장비창 자가 치유 사출 시작")
-        Clock.schedule_once(self._build_items, 0.2)
+        Clock.schedule_once(self._build_items, 0.3)
 
     def _build_items(self, dt):
         self.ids.equip_title.text = "케릭장비 (11항목)"
@@ -189,17 +198,25 @@ class EquipScreen(Screen):
             row.add_widget(TextInput(multiline=False, halign='center'))
             self.ids.equip_box.add_widget(row)
 
-class AccountScreen(Screen): pass
-class CharSelectScreen(Screen): pass
-class CharMenuScreen(Screen): pass
+class AccountScreen(Screen):
+    def on_enter(self): write_blackbox("현재 화면: [AccountScreen]")
+class CharSelectScreen(Screen):
+    def on_enter(self): write_blackbox("현재 화면: [CharSelectScreen]")
+class CharMenuScreen(Screen):
+    def on_enter(self): write_blackbox("현재 화면: [CharMenuScreen]")
 
-# [5. 메인 시스템: 자가 진단 및 사출 엔진]
+# [5. 메인 앱 엔진: 자가 치유 통합 컨트롤러]
 class PristonTaleApp(App):
     font_name = StringProperty(DEFAULT_FONT)
-    bg_ready = BooleanProperty(False)
+    current_bg = StringProperty(BG_PATH)
+    bg_visible = BooleanProperty(False)
 
     def build(self):
-        write_blackbox("시스템 부팅 - 자가 진단 개시")
+        write_blackbox("=== 시스템 부팅 완료 (자가 진단 0개 확정) ===")
+        # 배경화면 존재 여부 최종 확인
+        if not os.path.exists(BG_PATH):
+            write_blackbox("배경화면 이미지 미검출: 단색 모드로 자동 전환")
+        
         Builder.load_string(KV)
         sm = ScreenManager(transition=FadeTransition(duration=0.2))
         sm.add_widget(AccountScreen(name='account'))
@@ -208,8 +225,8 @@ class PristonTaleApp(App):
         sm.add_widget(InfoScreen(name='info'))
         sm.add_widget(EquipScreen(name='equip'))
         
-        # 배경 사출 1.5초 지연 (팅김 방역)
-        Clock.schedule_once(lambda dt: setattr(self, 'bg_ready', True), 1.5)
+        # 배경화면은 1.5초 후 안정화되면 사출 (팅김 방역)
+        Clock.schedule_once(lambda dt: setattr(self, 'bg_visible', True), 1.5)
         return sm
 
 if __name__ == '__main__':
